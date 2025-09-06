@@ -2,7 +2,7 @@
 
 module Cards where
 
-import Data.Kind (Type)
+import Vec (Vec (Index, allSame, fromIndex, (!)))
 
 data CardColor = Red | Yellow | Green | Blue | White deriving (Show, Eq)
 
@@ -14,20 +14,10 @@ data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
 
 data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
 
-class Vec a where
-  type Index a :: Type
+type CardVec a = ColorVec (NumberVec a)
 
-  fromIndex :: (Index a -> v) -> a v
-  (!) :: a v -> Index a -> v
-
-  allSame :: v -> a v
-  allSame = fromIndex . const
-
-  set :: (Eq (Index a)) => Index a -> v -> a v -> a v
-  set index value original = fromIndex (\i -> if i == index then value else original ! i)
-
-  vmap :: (t -> t) -> a t -> a t
-  vmap f original = fromIndex (\i -> f (original ! i))
+startingDeck :: (Num a) => CardVec a
+startingDeck = allSame (NumberVec 3 2 2 2 1)
 
 instance Vec ColorVec where
   type Index ColorVec = CardColor

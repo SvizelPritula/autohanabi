@@ -1,6 +1,7 @@
 module Main where
 
-import Cards (CardColor (Blue), ColorVec, Vec (allSame, set))
+import Cards (CardColor (Blue), ColorVec)
+import Vec (Vec (allSame, set))
 
 vec :: (Vec a) => a Integer
 vec = allSame 1
