@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
-
 module Vec where
 
 import Data.Kind (Type)
@@ -16,5 +14,11 @@ class Vec a where
   set :: (Eq (Index a)) => Index a -> v -> a v -> a v
   set index value original = fromIndex (\i -> if i == index then value else original ! i)
 
-  vmap :: (t -> t) -> a t -> a t
+  vmap :: (t -> u) -> a t -> a u
   vmap f original = fromIndex (\i -> f (original ! i))
+
+  toList :: (Bounded (Index a), Enum (Index a)) => a b -> [b]
+  toList vec = map (vec !) [minBound .. maxBound]
+
+vfoldl :: (Vec v, Bounded (Index v), Enum (Index v)) => (b -> a -> b) -> b -> v a -> b
+vfoldl f zero vec = foldl f zero (toList vec)

@@ -1,10 +1,18 @@
 module Main where
 
-import Cards (CardColor (Blue), ColorVec)
-import Vec (Vec (allSame, set))
+import Cards (Deck, drawCard, startingDeck)
+import System.Random (RandomGen, initStdGen)
 
-vec :: (Vec a) => a Integer
-vec = allSame 1
+drawAll :: (RandomGen g) => Deck -> g -> IO ()
+drawAll deck rng = do
+  let (card, newDeck, newRng) = drawCard deck rng
+  case card of
+    Just cardValue -> do
+      print cardValue
+      drawAll newDeck newRng
+    Nothing -> return ()
 
 main :: IO ()
-main = print (set Blue 2 (vec :: ColorVec Integer))
+main = do
+  rng <- initStdGen
+  drawAll startingDeck rng

@@ -1,12 +1,12 @@
-{-# LANGUAGE TypeFamilies #-}
-
 module Cards where
 
-import Vec (Vec (Index, allSame, fromIndex, (!)))
+import Data.Maybe (fromJust)
+import System.Random (RandomGen, uniformR)
+import Vec (Vec (Index, allSame, fromIndex, set, (!)))
 
-data CardColor = Red | Yellow | Green | Blue | White deriving (Show, Eq)
+data CardColor = Red | Yellow | Green | Blue | White deriving (Show, Eq, Ord, Enum, Bounded)
 
-data CardNumber = One | Two | Three | Four | Five deriving (Show, Eq)
+data CardNumber = One | Two | Three | Four | Five deriving (Show, Eq, Ord, Enum, Bounded)
 
 data Card = Card CardColor CardNumber deriving (Show, Eq)
 
@@ -16,7 +16,9 @@ data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
 
 type CardVec a = ColorVec (NumberVec a)
 
-startingDeck :: (Num a) => CardVec a
+type Deck = CardVec Int
+
+startingDeck :: Deck
 startingDeck = allSame (NumberVec 3 2 2 2 1)
 
 instance Vec ColorVec where
@@ -40,3 +42,30 @@ instance Vec NumberVec where
   (!) (NumberVec _ _ _ _ v) Five = v
 
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
+
+cardsWithCounts :: Deck -> [(Card, Int)]
+cardsWithCounts deck =
+  [ (Card color number, deck ! color ! number)
+  | color <- [minBound .. maxBound],
+    number <- [minBound .. maxBound]
+  ]
+
+indexWithWeight :: [(a, Int)] -> Int -> Maybe a
+indexWithWeight [] _ = Nothing
+indexWithWeight ((el, count) : rest) idx
+  | idx < count = Just el
+  | otherwise = indexWithWeight rest (idx - count)
+
+drawCard :: (RandomGen g) => Deck -> g -> (Maybe Card, Deck, g)
+drawCard deck rng =
+  let cards = cardsWithCounts deck
+      cardCount = sum (map snd cards)
+   in if cardCount == 0
+        then
+          (Nothing, deck, rng)
+        else
+          let (idx, newRng) = uniformR (0, cardCount - 1) rng
+              card = fromJust (indexWithWeight cards idx)
+              Card color number = card
+              newDeck = set color (set number (deck ! color ! number - 1) (deck ! color)) deck
+           in (Just card, newDeck, newRng)
