@@ -17,6 +17,9 @@ class Vec a where
   vmap :: (t -> u) -> a t -> a u
   vmap f original = fromIndex (\i -> f (original ! i))
 
+  toListWithKey :: (Bounded (Index a), Enum (Index a)) => a b -> [(Index a, b)]
+  toListWithKey vec = map (\i -> (i, vec ! i)) [minBound .. maxBound]
+
   toList :: (Bounded (Index a), Enum (Index a)) => a b -> [b]
   toList vec = map (vec !) [minBound .. maxBound]
 

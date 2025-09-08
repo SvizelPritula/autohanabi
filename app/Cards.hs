@@ -1,5 +1,6 @@
 module Cards where
 
+import Ansi (makeBlue, makeGreen, makeRed, makeWhite, makeYellow)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT)
 import Data.Maybe (fromJust)
 import System.Random (RandomGen)
@@ -11,6 +12,12 @@ data CardColor = Red | Yellow | Green | Blue | White deriving (Eq, Ord, Enum, Bo
 data CardNumber = One | Two | Three | Four | Five deriving (Eq, Ord, Enum, Bounded)
 
 data Card = Card CardColor CardNumber deriving (Eq)
+
+cardColor :: Card -> CardColor
+cardColor (Card color _) = color
+
+cardNumber :: Card -> CardNumber
+cardNumber (Card _ number) = number
 
 data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
 
@@ -46,11 +53,18 @@ instance Vec NumberVec where
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
 
 colored :: CardColor -> String -> String
-colored Red text = "\x1b[31m" ++ text ++ "\x1b[39m"
-colored Yellow text = "\x1b[33m" ++ text ++ "\x1b[39m"
-colored Green text = "\x1b[32m" ++ text ++ "\x1b[39m"
-colored Blue text = "\x1b[34m" ++ text ++ "\x1b[39m"
-colored White text = "\x1b[37m" ++ text ++ "\x1b[39m"
+colored Red = makeRed
+colored Yellow = makeYellow
+colored Green = makeGreen
+colored Blue = makeBlue
+colored White = makeWhite
+
+instance Show CardColor where
+  show Red = makeRed "Red"
+  show Yellow = makeYellow "Yellow"
+  show Green = makeGreen "Green"
+  show Blue = makeBlue "Blue"
+  show White = makeWhite "White"
 
 instance Show CardNumber where
   show One = "1"

@@ -1,6 +1,6 @@
 module Game where
 
-import Cards (Card, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
+import Cards (Card, CardColor, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Maybe (fromJust)
@@ -22,6 +22,10 @@ data CardState = CardState {actual :: Card, knowledge :: CardVec Bool} deriving 
 data Player = Human | Computer deriving (Show, Eq)
 
 data PlayerVec a = PlayerVec a a deriving (Show, Eq)
+
+data Action = Play Int | Discard Int | Hint Hint deriving (Show, Eq)
+
+data Hint = ColorHint CardColor | NumberHint CardNumber deriving (Show, Eq)
 
 instance Vec PlayerVec where
   type Index PlayerVec = Player

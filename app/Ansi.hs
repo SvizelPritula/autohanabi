@@ -17,3 +17,12 @@ makeWhite text = "\x1b[37m" ++ text ++ "\x1b[39m"
 
 makeGray :: String -> String
 makeGray text = "\x1b[2m" ++ text ++ "\x1b[22m"
+
+makeBold :: String -> String
+makeBold text = "\x1b[1m" ++ text ++ "\x1b[22m"
+
+makeUnderline :: String -> String
+makeUnderline text = "\x1b[4m" ++ text ++ "\x1b[24m"
+
+clearScreen :: String
+clearScreen = "\x1b[2J\x1b[0;0H"
