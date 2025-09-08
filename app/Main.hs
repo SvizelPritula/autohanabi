@@ -1,18 +1,16 @@
 module Main where
 
-import Cards (Deck, drawCard, startingDeck)
-import System.Random (RandomGen, initStdGen)
+import Control.Monad.State.Strict (State)
+import Game (genStartingState)
+import System.Random (StdGen, initStdGen)
+import System.Random.Stateful (StateGenM, runStateGen_)
 
-drawAll :: (RandomGen g) => Deck -> g -> IO ()
-drawAll deck rng = do
-  let (card, newDeck, newRng) = drawCard deck rng
-  case card of
-    Just cardValue -> do
-      print cardValue
-      drawAll newDeck newRng
-    Nothing -> return ()
+runStateGenIO :: (StateGenM StdGen -> State StdGen a) -> IO a
+runStateGenIO f = do
+  rng <- initStdGen
+  return (runStateGen_ rng f)
 
 main :: IO ()
 main = do
-  rng <- initStdGen
-  drawAll startingDeck rng
+  state <- runStateGenIO genStartingState
+  print state

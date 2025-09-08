@@ -1,9 +1,14 @@
 module Game where
 
-import Cards (Card, CardNumber, CardVec, ColorVec, Deck)
-import Vec (Vec (Index, fromIndex, (!)))
+import Cards (Card, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
+import Control.Monad (replicateM)
+import Control.Monad.State.Strict (State, StateT (runStateT))
+import Data.Maybe (fromJust)
+import System.Random (RandomGen)
+import System.Random.Stateful (StateGenM)
+import Vec (Vec (Index, allSame, fromIndex, (!)))
 
-data State = State
+data GameState = GameState
   { deck :: Deck,
     piles :: ColorVec (Maybe CardNumber),
     hands :: PlayerVec [CardState],
@@ -29,3 +34,26 @@ instance Vec PlayerVec where
 otherPlayer :: Player -> Player
 otherPlayer Computer = Human
 otherPlayer Human = Computer
+
+cardInHandCount :: Int
+cardInHandCount = 4
+
+drawStartingHand :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (PlayerVec [CardState])
+drawStartingHand rng = do
+  let drawHandCards = replicateM cardInHandCount (fmap fromJust (drawCard rng))
+  let drawHand = fmap (map (\actual -> CardState {actual, knowledge = allSame (allSame True)})) drawHandCards
+  human <- drawHand
+  computer <- drawHand
+  return (PlayerVec human computer)
+
+genStartingState :: (RandomGen g) => StateGenM g -> State g GameState
+genStartingState rng = do
+  (hands, deck) <- runStateT (drawStartingHand rng) startingDeck
+  return
+    GameState
+      { deck,
+        hands,
+        piles = allSame Nothing,
+        informationTokens = 8,
+        fuseTokens = 3
+      }

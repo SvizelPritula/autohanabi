@@ -1,7 +1,9 @@
 module Cards where
 
+import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT)
 import Data.Maybe (fromJust)
-import System.Random (RandomGen, uniformR)
+import System.Random (RandomGen)
+import System.Random.Stateful (StateGenM, UniformRange (uniformRM))
 import Vec (Vec (Index, allSame, fromIndex, set, (!)))
 
 data CardColor = Red | Yellow | Green | Blue | White deriving (Show, Eq, Ord, Enum, Bounded)
@@ -43,6 +45,12 @@ instance Vec NumberVec where
 
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
 
+setCardVec :: Card -> a -> CardVec a -> CardVec a
+setCardVec (Card color number) value deck = set color (set number value (deck ! color)) deck
+
+getCardVec :: Card -> CardVec a -> a
+getCardVec (Card color number) deck = deck ! color ! number
+
 cardsWithCounts :: Deck -> [(Card, Int)]
 cardsWithCounts deck =
   [ (Card color number, deck ! color ! number)
@@ -56,16 +64,17 @@ indexWithWeight ((el, count) : rest) idx
   | idx < count = Just el
   | otherwise = indexWithWeight rest (idx - count)
 
-drawCard :: (RandomGen g) => Deck -> g -> (Maybe Card, Deck, g)
-drawCard deck rng =
+drawCard :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (Maybe Card)
+drawCard rng = do
+  deck <- get
   let cards = cardsWithCounts deck
-      cardCount = sum (map snd cards)
-   in if cardCount == 0
-        then
-          (Nothing, deck, rng)
-        else
-          let (idx, newRng) = uniformR (0, cardCount - 1) rng
-              card = fromJust (indexWithWeight cards idx)
-              Card color number = card
-              newDeck = set color (set number (deck ! color ! number - 1) (deck ! color)) deck
-           in (Just card, newDeck, newRng)
+  let cardCount = sum (map snd cards)
+  if cardCount == 0
+    then
+      return Nothing
+    else do
+      idx <- lift (uniformRM (0, cardCount - 1) rng)
+      let card = fromJust (indexWithWeight cards idx)
+      let newCount = (getCardVec card deck) - 1
+      put (setCardVec card newCount deck)
+      return (Just card)
