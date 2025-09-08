@@ -39,7 +39,7 @@ instance Vec ColorVec where
   (!) (ColorVec _ _ _ v _) Blue = v
   (!) (ColorVec _ _ _ _ v) White = v
 
-  fromIndex f = ColorVec (f Red) (f Blue) (f Green) (f Yellow) (f White)
+  fromIndex f = ColorVec (f Red) (f Yellow) (f Green) (f Blue) (f White)
 
 instance Vec NumberVec where
   type Index NumberVec = CardNumber
@@ -59,12 +59,15 @@ colored Green = makeGreen
 colored Blue = makeBlue
 colored White = makeWhite
 
+colorName :: CardColor -> String
+colorName Red = "red"
+colorName Yellow = "yellow"
+colorName Green = "green"
+colorName Blue = "blue"
+colorName White = "white"
+
 instance Show CardColor where
-  show Red = makeRed "Red"
-  show Yellow = makeYellow "Yellow"
-  show Green = makeGreen "Green"
-  show Blue = makeBlue "Blue"
-  show White = makeWhite "White"
+  show color = colored color $ colorName color
 
 instance Show CardNumber where
   show One = "1"
@@ -75,6 +78,9 @@ instance Show CardNumber where
 
 instance Show Card where
   show (Card color number) = colored color (show number)
+
+longCardName :: Card -> String
+longCardName (Card color number) = colored color (colorName color ++ " " ++ show number)
 
 setCardVec :: Card -> a -> CardVec a -> CardVec a
 setCardVec (Card color number) value deck = set color (set number value (deck ! color)) deck

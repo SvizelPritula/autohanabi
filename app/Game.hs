@@ -27,6 +27,8 @@ data Action = Play Int | Discard Int | Hint Hint deriving (Show, Eq)
 
 data Hint = ColorHint CardColor | NumberHint CardNumber deriving (Show, Eq)
 
+data ActionResult = Played Card Bool | Discarded Card | Hinted Hint [Int]
+
 instance Vec PlayerVec where
   type Index PlayerVec = Player
 
@@ -97,23 +99,29 @@ matchesHint :: Hint -> Card -> Bool
 matchesHint (ColorHint color) (Card c _) = c == color
 matchesHint (NumberHint number) (Card _ n) = n == number
 
-play :: (RandomGen g) => GameState -> Player -> Action -> StateGenM g -> State g GameState
+enumerate :: [a] -> [(Int, a)]
+enumerate = zip [0 ..]
+
+play :: (RandomGen g) => GameState -> Player -> Action -> StateGenM g -> State g (GameState, ActionResult)
 play state player (Play idx) rng = do
   (Card color number, newState) <- takeCardFromHand state player idx rng
   if Just number == pileTargetNumber (piles state ! color)
-    then return newState {piles = set color (Just number) (piles state)}
-    else return newState {fuseTokens = fuseTokens state - 1}
+    then return (newState {piles = set color (Just number) (piles state)}, Played (Card color number) True)
+    else return (newState {fuseTokens = fuseTokens state - 1}, Played (Card color number) False)
 play state player (Discard idx) rng = do
-  (_, newState) <- takeCardFromHand state player idx rng
+  (card, newState) <- takeCardFromHand state player idx rng
   let newTokens = min (informationTokens state + 1) maxInformationTokens
-  return newState {informationTokens = newTokens}
+  return (newState {informationTokens = newTokens}, Discarded card)
 play state player (Hint hint) _rng =
-  let matches = matchesHint hint
+  let coplayerCards = hands state ! (otherPlayer player)
+      matches = matchesHint hint
       filterKnowledge shouldMatch = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matches (Card color number) == shouldMatch)))
       mapCardState cardState = cardState {knowledge = filterKnowledge (matches $ actual cardState) (knowledge cardState)}
-      newHand = map mapCardState (hands state ! (otherPlayer player))
+      newHand = map mapCardState coplayerCards
    in return
-        state
-          { hands = set (otherPlayer player) newHand (hands state),
-            informationTokens = informationTokens state - 1
-          }
+        ( state
+            { hands = set (otherPlayer player) newHand (hands state),
+              informationTokens = informationTokens state - 1
+            },
+          Hinted hint (map fst $ filter (uncurry $ const matches) (enumerate $ map actual coplayerCards))
+        )

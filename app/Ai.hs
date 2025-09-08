@@ -2,7 +2,7 @@ module Ai where
 
 import Cards (Card (Card), CardVec, possibleCards)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), matchesHint, pileTargetNumber)
+import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), matchesHint, pileTargetNumber, enumerate)
 import Vec ((!))
 
 pickAction :: GameState -> Action
@@ -31,6 +31,3 @@ indexOf predicate list = fmap fst $ find (uncurry (const predicate)) (enumerate 
 
 myHand :: GameState -> [CardVec Bool]
 myHand = (map knowledge) . (! Computer) . hands
-
-enumerate :: [a] -> [(Int, a)]
-enumerate = zip [0 ..]

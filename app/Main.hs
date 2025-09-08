@@ -2,12 +2,12 @@ module Main where
 
 import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
-import Cards (Card, CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colored)
+import Cards (Card, CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, longCardName)
 import Control.Monad (forM_)
 import Control.Monad.State.Strict (State)
-import Data.Char (chr, ord)
+import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), CardState (actual), GameState (fuseTokens, hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, maxFuseTokens, maxInformationTokens, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxInformationTokens, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
@@ -43,9 +43,9 @@ printGameState state = do
   printLine "Infos:   " [token makeBlue (i <= informationTokens state) | i <- [1 .. maxInformationTokens]]
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
 
-data ActionResult a = Selected a | Retry deriving (Functor)
+data OptionResult a = Selected a | Retry deriving (Functor)
 
-promptRetry :: GameState -> IO () -> (Char -> IO (ActionResult a)) -> IO a
+promptRetry :: GameState -> IO () -> (Char -> IO (OptionResult a)) -> IO a
 promptRetry state printPrompt handleAnswer = do
   printGameState state
   putChar '\n'
@@ -56,7 +56,7 @@ promptRetry state printPrompt handleAnswer = do
     Selected value -> return value
     Retry -> promptRetry state printPrompt handleAnswer
 
-data Option a = Option {key :: Char, label :: String, action :: IO (ActionResult a), visible :: Bool}
+data Option a = Option {key :: Char, label :: String, action :: IO (OptionResult a), visible :: Bool}
 
 prompt :: GameState -> String -> [Option a] -> IO a
 prompt state heading allOptions =
@@ -73,6 +73,10 @@ prompt state heading allOptions =
         Nothing -> return Retry
    in promptRetry state printPrompt handleAnswer
 
+capitalize :: String -> String
+capitalize "" = ""
+capitalize (first : rest) = toUpper first : rest
+
 promptTurn :: GameState -> IO (Maybe Action)
 promptTurn state =
   let handle wrapper = fmap (fmap (Just . wrapper))
@@ -85,22 +89,22 @@ promptTurn state =
           Option {key = 'Q', label = "Quit", action = return (Selected Nothing), visible = True}
         ]
 
-backOption :: Option (ActionResult a)
+backOption :: Option (OptionResult a)
 backOption = Option {key = 'q', label = "Back", action = return (Selected Retry), visible = True}
 
 numberToOrdinal :: Int -> String
-numberToOrdinal 1 = "First"
-numberToOrdinal 2 = "Second"
-numberToOrdinal 3 = "Third"
-numberToOrdinal 4 = "Fourth"
+numberToOrdinal 1 = "first"
+numberToOrdinal 2 = "second"
+numberToOrdinal 3 = "third"
+numberToOrdinal 4 = "fourth"
 numberToOrdinal n = (show n) ++ "th"
 
-promptCard :: GameState -> String -> IO (ActionResult Int)
+promptCard :: GameState -> String -> IO (OptionResult Int)
 promptCard state action =
   let cardOptions =
         [ Option
             { key = chr (ord '0' + i),
-              label = numberToOrdinal i ++ " card",
+              label = capitalize $ numberToOrdinal i ++ " card",
               action = return (Selected (Selected (i - 1))),
               visible = True
             }
@@ -121,7 +125,7 @@ colorKey White = 'w'
 numberKey :: CardNumber -> Char
 numberKey number = chr (ord '1' + fromEnum number)
 
-promptHint :: GameState -> IO (ActionResult Hint)
+promptHint :: GameState -> IO (OptionResult Hint)
 promptHint state =
   let handle wrapper = fmap (fmap (Selected . wrapper))
    in prompt
@@ -130,24 +134,24 @@ promptHint state =
         [ Option
             { key = 'c',
               label = "Color",
-              action = handle ColorHint (promptHintAttribute state "color" colorKey cardColor),
+              action = handle ColorHint (promptHintAttribute state "color" colorKey (\c -> colored c $ capitalize $ colorName c) cardColor),
               visible = True
             },
           Option
             { key = 'n',
               label = "Number",
-              action = handle NumberHint (promptHintAttribute state "number" numberKey cardNumber),
+              action = handle NumberHint (promptHintAttribute state "number" numberKey show cardNumber),
               visible = True
             },
           backOption
         ]
 
-promptHintAttribute :: (Show a, Bounded a, Enum a, Eq a) => GameState -> String -> (a -> Char) -> (Card -> a) -> IO (ActionResult a)
-promptHintAttribute state name key get =
+promptHintAttribute :: (Bounded a, Enum a, Eq a) => GameState -> String -> (a -> Char) -> (a -> String) -> (Card -> a) -> IO (OptionResult a)
+promptHintAttribute state name key label get =
   let options =
         [ Option
             { key = key attribute,
-              label = show attribute,
+              label = label attribute,
               action = return (Selected (Selected attribute)),
               visible = any (\c -> get (actual c) == attribute) (hands state ! Computer)
             }
@@ -158,14 +162,60 @@ promptHintAttribute state name key get =
         ("Which " ++ name ++ " do you want to hint?")
         (options ++ [backOption])
 
+showAction :: GameState -> Player -> ActionResult -> IO ()
+showAction state player action = do
+  printGameState state
+  putChar '\n'
+
+  case player of
+    Computer -> putStr "The computer "
+    Human -> putStr "You "
+
+  case action of
+    Played card success -> do
+      putStr ("played a " ++ (longCardName card))
+      if success
+        then putStrLn "."
+        else putStrLn ", which was a misfire."
+    Discarded card -> putStrLn ("discarded a " ++ (longCardName card) ++ ".")
+    Hinted hint cards -> do
+      case player of
+        Computer -> putStr "told you your "
+        Human -> putStr "told the computer his "
+
+      let len = length cards
+          listElementPrefix i
+            | i == 0 = ""
+            | i == (len - 1) = " and "
+            | otherwise = ", "
+      forM_ (enumerate cards) (\(i, c) -> putStr (listElementPrefix i ++ numberToOrdinal (c + 1)))
+
+      putStr (if len == 1 then " card is " else " cards are ")
+
+      case hint of
+        ColorHint color -> putStr $ show color
+        NumberHint number -> putStr $ "a " ++ show number
+
+      putStrLn "."
+
+  putChar '\n'
+  putStrLn "Press any key to continue."
+
+  _ <- getChar
+  return ()
+
 runGame :: GameState -> IO ()
 runGame state = do
   maybeAction <- promptTurn state
   case maybeAction of
     Just action -> do
-      state2 <- runStateGenIO (play state Human action)
+      (state2, result1) <- runStateGenIO (play state Human action)
+      showAction state2 Human result1
+
       let computerAction = pickAction state2
-      state3 <- runStateGenIO (play state2 Computer computerAction)
+      (state3, result2) <- runStateGenIO (play state2 Computer computerAction)
+      showAction state3 Computer result2
+
       runGame state3
     Nothing -> return ()
 
