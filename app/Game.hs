@@ -1,12 +1,12 @@
 module Game where
 
-import Cards (Card, CardColor, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
+import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (State, StateT (runStateT))
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, maybeToList)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
-import Vec (Vec (Index, allSame, fromIndex, (!)))
+import Vec (Vec (Index, allSame, fromIndex, set, vmapWithKey, (!)))
 
 data GameState = GameState
   { deck :: Deck,
@@ -39,6 +39,9 @@ otherPlayer :: Player -> Player
 otherPlayer Computer = Human
 otherPlayer Human = Computer
 
+cardToCardState :: Card -> CardState
+cardToCardState actual = CardState {actual, knowledge = allSame (allSame True)}
+
 handSize :: Int
 handSize = 4
 
@@ -51,7 +54,7 @@ maxFuseTokens = 3
 drawStartingHand :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (PlayerVec [CardState])
 drawStartingHand rng = do
   let drawHandCards = replicateM handSize (fmap fromJust (drawCard rng))
-  let drawHand = fmap (map (\actual -> CardState {actual, knowledge = allSame (allSame True)})) drawHandCards
+  let drawHand = fmap (map cardToCardState) drawHandCards
   human <- drawHand
   computer <- drawHand
   return (PlayerVec human computer)
@@ -67,3 +70,48 @@ genStartingState rng = do
         informationTokens = maxInformationTokens,
         fuseTokens = maxFuseTokens
       }
+
+removeNth :: Int -> [a] -> (a, [a])
+removeNth idx list =
+  case splitAt idx list of
+    (start, (el : end)) -> (el, start ++ end)
+    (_, []) -> error "List is too short"
+
+pileTargetNumber :: Maybe CardNumber -> Maybe CardNumber
+pileTargetNumber (Nothing) = Just (minBound)
+pileTargetNumber (Just number)
+  | number < maxBound = Just (succ number)
+  | otherwise = Nothing
+
+takeCardFromHand :: (RandomGen g) => GameState -> Player -> Int -> StateGenM g -> State g (Card, GameState)
+takeCardFromHand state player idx rng = do
+  let (cardState, remainingHand) = removeNth idx (hands state ! player)
+  (newCard, newDeck) <- runStateT (drawCard rng) (deck state)
+  let newHand = remainingHand ++ maybeToList (fmap cardToCardState newCard)
+  return
+    ( actual cardState,
+      state {deck = newDeck, hands = set player newHand (hands state)}
+    )
+
+play :: (RandomGen g) => GameState -> Player -> Action -> StateGenM g -> State g GameState
+play state player (Play idx) rng = do
+  (Card color number, newState) <- takeCardFromHand state player idx rng
+  if Just number == pileTargetNumber (piles state ! color)
+    then return newState {piles = set color (Just number) (piles state)}
+    else return newState {fuseTokens = fuseTokens state - 1}
+play state player (Discard idx) rng = do
+  (_, newState) <- takeCardFromHand state player idx rng
+  let newTokens = min (informationTokens state + 1) maxInformationTokens
+  return newState {informationTokens = newTokens}
+play state player (Hint hint) _rng =
+  let consistantWithHint = case hint of
+        ColorHint expected -> \actual _ -> actual == expected
+        NumberHint expected -> \_ actual -> actual == expected
+      filterKnowledge = vmapWithKey (\color -> vmapWithKey (\number p -> p && (consistantWithHint color number)))
+      mapCardState cardState = cardState {knowledge = filterKnowledge (knowledge cardState)}
+      newHand = map mapCardState (hands state ! (otherPlayer player))
+   in return
+        state
+          { hands = set (otherPlayer player) newHand (hands state),
+            informationTokens = informationTokens state - 1
+          }

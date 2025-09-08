@@ -6,7 +6,7 @@ import Control.Monad (forM_)
 import Control.Monad.State.Strict (State)
 import Data.Char (chr, ord)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), CardState (actual), GameState (fuseTokens, hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, maxFuseTokens, maxInformationTokens)
+import Game (Action (Discard, Hint, Play), CardState (actual), GameState (fuseTokens, hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, maxFuseTokens, maxInformationTokens, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
@@ -29,7 +29,7 @@ printGameState state = do
   let token color True = color "*"
       token _ False = makeGray "*"
 
-  let pile _ (Just card) = show card
+  let pile color (Just card) = colored color (show card)
       pile color Nothing = colored color "0"
 
   putStr clearScreen
@@ -100,7 +100,7 @@ promptCard state action =
         [ Option
             { key = chr (ord '0' + i),
               label = numberToOrdinal i ++ " card",
-              action = return (Selected (Selected i)),
+              action = return (Selected (Selected (i - 1))),
               visible = True
             }
         | i <- [1 .. length (hands state ! Human)]
@@ -157,10 +157,18 @@ promptHintAttribute state name key get =
         ("Which " ++ name ++ " do you want to hint?")
         (options ++ [backOption])
 
+runGame :: GameState -> IO ()
+runGame state = do
+  maybeAction <- promptTurn state
+  case maybeAction of
+    Just action -> do
+      newState <- runStateGenIO (play state Human action)
+      runGame newState
+    Nothing -> return ()
+
 main :: IO ()
 main = do
   state <- runStateGenIO genStartingState
   hSetBuffering stdin NoBuffering
 
-  action <- promptTurn state
-  print action
+  runGame state
