@@ -89,6 +89,14 @@ cardsWithCounts deck =
     number <- [minBound .. maxBound]
   ]
 
+possibleCards :: CardVec Bool -> [Card]
+possibleCards knowledge =
+  [ Card color number
+  | color <- [minBound .. maxBound],
+    number <- [minBound .. maxBound],
+    knowledge ! color ! number
+  ]
+
 indexWithWeight :: [(a, Int)] -> Int -> Maybe a
 indexWithWeight [] _ = Nothing
 indexWithWeight ((el, count) : rest) idx

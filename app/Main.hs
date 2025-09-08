@@ -1,5 +1,6 @@
 module Main where
 
+import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
 import Cards (Card, CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colored)
 import Control.Monad (forM_)
@@ -162,8 +163,10 @@ runGame state = do
   maybeAction <- promptTurn state
   case maybeAction of
     Just action -> do
-      newState <- runStateGenIO (play state Human action)
-      runGame newState
+      state2 <- runStateGenIO (play state Human action)
+      let computerAction = pickAction state2
+      state3 <- runStateGenIO (play state2 Computer computerAction)
+      runGame state3
     Nothing -> return ()
 
 main :: IO ()
