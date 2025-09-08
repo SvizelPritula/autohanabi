@@ -93,6 +93,10 @@ takeCardFromHand state player idx rng = do
       state {deck = newDeck, hands = set player newHand (hands state)}
     )
 
+matchesHint :: Hint -> Card -> Bool
+matchesHint (ColorHint color) (Card c _) = c == color
+matchesHint (NumberHint number) (Card _ n) = n == number
+
 play :: (RandomGen g) => GameState -> Player -> Action -> StateGenM g -> State g GameState
 play state player (Play idx) rng = do
   (Card color number, newState) <- takeCardFromHand state player idx rng
@@ -104,11 +108,9 @@ play state player (Discard idx) rng = do
   let newTokens = min (informationTokens state + 1) maxInformationTokens
   return newState {informationTokens = newTokens}
 play state player (Hint hint) _rng =
-  let consistantWithHint = case hint of
-        ColorHint expected -> \actual _ -> actual == expected
-        NumberHint expected -> \_ actual -> actual == expected
-      filterKnowledge = vmapWithKey (\color -> vmapWithKey (\number p -> p && (consistantWithHint color number)))
-      mapCardState cardState = cardState {knowledge = filterKnowledge (knowledge cardState)}
+  let matches = matchesHint hint
+      filterKnowledge shouldMatch = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matches (Card color number) == shouldMatch)))
+      mapCardState cardState = cardState {knowledge = filterKnowledge (matches $ actual cardState) (knowledge cardState)}
       newHand = map mapCardState (hands state ! (otherPlayer player))
    in return
         state
