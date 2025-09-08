@@ -6,11 +6,11 @@ import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM, UniformRange (uniformRM))
 import Vec (Vec (Index, allSame, fromIndex, set, (!)))
 
-data CardColor = Red | Yellow | Green | Blue | White deriving (Show, Eq, Ord, Enum, Bounded)
+data CardColor = Red | Yellow | Green | Blue | White deriving (Eq, Ord, Enum, Bounded)
 
-data CardNumber = One | Two | Three | Four | Five deriving (Show, Eq, Ord, Enum, Bounded)
+data CardNumber = One | Two | Three | Four | Five deriving (Eq, Ord, Enum, Bounded)
 
-data Card = Card CardColor CardNumber deriving (Show, Eq)
+data Card = Card CardColor CardNumber deriving (Eq)
 
 data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
 
@@ -44,6 +44,23 @@ instance Vec NumberVec where
   (!) (NumberVec _ _ _ _ v) Five = v
 
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
+
+colored :: CardColor -> String -> String
+colored Red text = "\x1b[31m" ++ text ++ "\x1b[39m"
+colored Yellow text = "\x1b[33m" ++ text ++ "\x1b[39m"
+colored Green text = "\x1b[32m" ++ text ++ "\x1b[39m"
+colored Blue text = "\x1b[34m" ++ text ++ "\x1b[39m"
+colored White text = "\x1b[37m" ++ text ++ "\x1b[39m"
+
+instance Show CardNumber where
+  show One = "1"
+  show Two = "2"
+  show Three = "3"
+  show Four = "4"
+  show Five = "5"
+
+instance Show Card where
+  show (Card color number) = colored color (show number)
 
 setCardVec :: Card -> a -> CardVec a -> CardVec a
 setCardVec (Card color number) value deck = set color (set number value (deck ! color)) deck

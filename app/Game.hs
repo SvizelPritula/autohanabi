@@ -35,12 +35,18 @@ otherPlayer :: Player -> Player
 otherPlayer Computer = Human
 otherPlayer Human = Computer
 
-cardInHandCount :: Int
-cardInHandCount = 4
+handSize :: Int
+handSize = 4
+
+maxInformationTokens :: Int
+maxInformationTokens = 8
+
+maxFuseTokens :: Int
+maxFuseTokens = 3
 
 drawStartingHand :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (PlayerVec [CardState])
 drawStartingHand rng = do
-  let drawHandCards = replicateM cardInHandCount (fmap fromJust (drawCard rng))
+  let drawHandCards = replicateM handSize (fmap fromJust (drawCard rng))
   let drawHand = fmap (map (\actual -> CardState {actual, knowledge = allSame (allSame True)})) drawHandCards
   human <- drawHand
   computer <- drawHand
@@ -54,6 +60,6 @@ genStartingState rng = do
       { deck,
         hands,
         piles = allSame Nothing,
-        informationTokens = 8,
-        fuseTokens = 3
+        informationTokens = maxInformationTokens,
+        fuseTokens = maxFuseTokens
       }
