@@ -4,19 +4,14 @@ import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
 import Cards (CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, longCardName)
 import Control.Monad (forM_)
-import Control.Monad.State.Strict (State)
+import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxinfoTokens, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxinfoTokens, otherPlayer, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
 import Vec (Vec (toListWithKey), (!))
-
-runStateGenIO :: (StateGenM StdGen -> State StdGen a) -> IO a
-runStateGenIO f = do
-  rng <- initStdGen
-  return (runStateGen_ rng f)
 
 printGameState :: GameState -> IO ()
 printGameState state = do
@@ -227,19 +222,30 @@ printAction player action = do
 showAction :: GameState -> Player -> ActionResult -> IO ()
 showAction state player action = showMessage state (printAction player action)
 
-runGame :: GameState -> IO ()
-runGame state = do
-  maybeAction <- promptTurn state
+runStateGenIO :: (StateGenM StdGen -> State StdGen a) -> IO a
+runStateGenIO f = do
+  rng <- initStdGen
+  return (runStateGen_ rng f)
+
+runTurn :: Player -> GameState -> IO (Maybe GameState)
+runTurn player state = do
+  maybeAction <- case player of
+    Human -> promptTurn state
+    Computer -> return $ Just $ pickAction state
+
   case maybeAction of
     Just action -> do
-      (state2, result1) <- runStateGenIO (play state Human action)
-      showAction state2 Human result1
+      (result, newState) <- runStateGenIO $ (\g -> runStateT (play player action g) state)
+      showAction newState player result
 
-      let computerAction = pickAction state2
-      (state3, result2) <- runStateGenIO (play state2 Computer computerAction)
-      showAction state3 Computer result2
+      return $ Just newState
+    Nothing -> return Nothing
 
-      runGame state3
+runGame :: Player -> GameState -> IO ()
+runGame player state = do
+  maybeState <- runTurn player state
+  case maybeState of
+    Just newState -> runGame (otherPlayer player) newState
     Nothing -> return ()
 
 main :: IO ()
@@ -247,4 +253,4 @@ main = do
   state <- runStateGenIO genStartingState
   hSetBuffering stdin NoBuffering
 
-  runGame state
+  runGame Human state
