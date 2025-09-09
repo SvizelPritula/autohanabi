@@ -252,9 +252,9 @@ runTurn player state = do
       (result, newState) <- runStateGenIO $ (\g -> runStateT (play player action g) state)
       showAction newState player result
 
-      if hasGameEnded state
+      if hasGameEnded newState
         then do
-          showGameEnd state
+          showGameEnd newState
           return Nothing
         else return $ Just newState
     Nothing -> return Nothing

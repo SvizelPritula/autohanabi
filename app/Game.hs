@@ -117,6 +117,9 @@ decrementGameEndCountdown = do
   let newCountdown = fmap (subtract 1) $ gameEndCountdown state
   put state {gameEndCountdown = newCountdown}
 
+filterKnowledge :: Hint -> Card -> CardVec Bool -> CardVec Bool
+filterKnowledge hint card = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matchesHint hint (Card color number) == matchesHint hint card)))
+
 play :: (RandomGen g) => Player -> Action -> StateGenM g -> StateT GameState (State g) ActionResult
 play player (Play idx) rng = do
   decrementGameEndCountdown
@@ -143,9 +146,7 @@ play player (Hint hint) _rng = do
   decrementGameEndCountdown
   state <- get
   let coplayerCards = hands state ! (otherPlayer player)
-  let matches = matchesHint hint
-      filterKnowledge shouldMatch = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matches (Card color number) == shouldMatch)))
-      updateCardState cardState = cardState {knowledge = filterKnowledge (matches $ actual cardState) (knowledge cardState)}
+  let updateCardState cardState = cardState {knowledge = filterKnowledge hint (actual cardState) (knowledge cardState)}
       newHand = map updateCardState coplayerCards
   put
     state
@@ -153,7 +154,7 @@ play player (Hint hint) _rng = do
         infoTokens = infoTokens state - 1
       }
   return $
-    Hinted hint (map fst $ filter (uncurry $ const matches) (enumerate $ map actual coplayerCards))
+    Hinted hint (map fst $ filter (uncurry $ const $ matchesHint hint) (enumerate $ map actual coplayerCards))
 
 hasGameEnded :: GameState -> Bool
 hasGameEnded state =
