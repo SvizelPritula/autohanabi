@@ -36,7 +36,9 @@ printGameState state = do
 
   printLine "Infos:   " [token makeBlue (i <= infoTokens state) | i <- [1 .. maxinfoTokens]]
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
-  printLine "Deck:    " [(show $ deckSize $ deck state) ++ " cards"]
+
+  let size = deckSize $ deck state
+  printLine "Deck:    " [(show size) ++ if size == 1 then " card" else " cards"]
 
 data OptionResult a = Selected a | Retry deriving (Functor)
 
