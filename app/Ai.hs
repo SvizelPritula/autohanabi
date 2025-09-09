@@ -2,14 +2,14 @@ module Ai where
 
 import Cards (Card (Card), CardVec, possibleCards)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), cardNumberToInt, enumerate, matchesHint, pileToInt)
+import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), cardNumberToInt, enumerate, matchesHint, pileToInt)
 import Vec ((!))
 
 pickAction :: GameState -> Action
 pickAction state = case tryGuaranteedPlay state of
   Just idx -> Play idx
   Nothing ->
-    if informationTokens state > 0
+    if infoTokens state > 0
       then
         let possibleHints = filter (\hint -> any (matchesHint hint) (map actual (hands state ! Human))) allHints
          in Hint (head possibleHints)

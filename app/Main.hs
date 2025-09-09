@@ -7,7 +7,7 @@ import Control.Monad (forM_)
 import Control.Monad.State.Strict (State)
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxInformationTokens, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxinfoTokens, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
@@ -40,7 +40,7 @@ printGameState state = do
   printLine "Computer:" (map (show . actual) (hands state ! Computer))
   printLine "You:     " (map (const (makeGray "?")) (hands state ! Human))
 
-  printLine "Infos:   " [token makeBlue (i <= informationTokens state) | i <- [1 .. maxInformationTokens]]
+  printLine "Infos:   " [token makeBlue (i <= infoTokens state) | i <- [1 .. maxinfoTokens]]
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
 
 data OptionResult a = Selected a | Retry deriving (Functor)
@@ -85,7 +85,7 @@ promptTurn state =
         "What do you want to do?"
         [ Option {key = 'p', label = "Play a card", action = handle Play (promptCard state "play"), visible = True},
           Option {key = 'd', label = "Discard a card", action = handle Discard (promptCard state "discard"), visible = True},
-          Option {key = 'h', label = "Give a hint", action = handle Hint (promptHint state), visible = informationTokens state > 0},
+          Option {key = 'h', label = "Give a hint", action = handle Hint (promptHint state), visible = infoTokens state > 0},
           Option {key = 'Q', label = "Quit", action = return (Selected Nothing), visible = True}
         ]
 

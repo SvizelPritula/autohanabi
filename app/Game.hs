@@ -12,7 +12,7 @@ data GameState = GameState
   { deck :: Deck,
     piles :: ColorVec (Maybe CardNumber),
     hands :: PlayerVec [CardState],
-    informationTokens :: Int,
+    infoTokens :: Int,
     fuseTokens :: Int
   }
   deriving (Show, Eq)
@@ -47,8 +47,8 @@ cardToCardState actual = CardState {actual, knowledge = allSame (allSame True)}
 handSize :: Int
 handSize = 4
 
-maxInformationTokens :: Int
-maxInformationTokens = 8
+maxinfoTokens :: Int
+maxinfoTokens = 8
 
 maxFuseTokens :: Int
 maxFuseTokens = 3
@@ -89,7 +89,7 @@ genStartingState rng = do
       { deck,
         hands,
         piles = allSame Nothing,
-        informationTokens = maxInformationTokens,
+        infoTokens = maxinfoTokens,
         fuseTokens = maxFuseTokens
       }
 
@@ -109,13 +109,13 @@ play state player (Play idx) rng = do
   if cardNumberToInt number == pileToInt (piles state ! color) + 1
     then
       let newPiles = set color (Just number) (piles state)
-          newTokens = informationTokens state + if number == maxBound then 1 else 0
-       in return (newState {piles = newPiles, informationTokens = newTokens}, Played (Card color number) True)
+          newTokens = infoTokens state + if number == maxBound then 1 else 0
+       in return (newState {piles = newPiles, infoTokens = newTokens}, Played (Card color number) True)
     else return (newState {fuseTokens = fuseTokens state - 1}, Played (Card color number) False)
 play state player (Discard idx) rng = do
   (card, newState) <- takeCardFromHand state player idx rng
-  let newTokens = min (informationTokens state + 1) maxInformationTokens
-  return (newState {informationTokens = newTokens}, Discarded card)
+  let newTokens = min (infoTokens state + 1) maxinfoTokens
+  return (newState {infoTokens = newTokens}, Discarded card)
 play state player (Hint hint) _rng =
   let coplayerCards = hands state ! (otherPlayer player)
       matches = matchesHint hint
@@ -125,7 +125,7 @@ play state player (Hint hint) _rng =
    in return
         ( state
             { hands = set (otherPlayer player) newHand (hands state),
-              informationTokens = informationTokens state - 1
+              infoTokens = infoTokens state - 1
             },
           Hinted hint (map fst $ filter (uncurry $ const matches) (enumerate $ map actual coplayerCards))
         )
