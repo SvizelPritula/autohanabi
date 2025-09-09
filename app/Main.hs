@@ -2,7 +2,7 @@ module Main where
 
 import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
-import Cards (Card, CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, longCardName)
+import Cards (CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, longCardName)
 import Control.Monad (forM_)
 import Control.Monad.State.Strict (State)
 import Data.Char (chr, ord, toUpper)
@@ -134,39 +134,65 @@ promptHint state =
         [ Option
             { key = 'c',
               label = "Color",
-              action = handle ColorHint (promptHintAttribute state "color" colorKey (\c -> colored c $ capitalize $ colorName c) cardColor),
+              action = handle ColorHint (promptHintColor state),
               visible = True
             },
           Option
             { key = 'n',
               label = "Number",
-              action = handle NumberHint (promptHintAttribute state "number" numberKey show cardNumber),
+              action = handle NumberHint (promptHintNumber state),
               visible = True
             },
           backOption
         ]
 
-promptHintAttribute :: (Bounded a, Enum a, Eq a) => GameState -> String -> (a -> Char) -> (a -> String) -> (Card -> a) -> IO (OptionResult a)
-promptHintAttribute state name key label get =
+promptHintColor :: GameState -> IO (OptionResult CardColor)
+promptHintColor state =
   let options =
         [ Option
-            { key = key attribute,
-              label = label attribute,
-              action = return (Selected (Selected attribute)),
-              visible = any (\c -> get (actual c) == attribute) (hands state ! Computer)
+            { key = colorKey color,
+              label = colored color $ capitalize $ colorName color,
+              action = return (Selected (Selected color)),
+              visible = any (\c -> cardColor (actual c) == color) (hands state ! Computer)
             }
-        | attribute <- [minBound .. maxBound]
+        | color <- [minBound .. maxBound]
         ]
    in prompt
         state
-        ("Which " ++ name ++ " do you want to hint?")
+        ("Which color do you want to hint?")
         (options ++ [backOption])
 
-showAction :: GameState -> Player -> ActionResult -> IO ()
-showAction state player action = do
+promptHintNumber :: GameState -> IO (OptionResult CardNumber)
+promptHintNumber state =
+  let options =
+        [ Option
+            { key = numberKey number,
+              label = show number,
+              action = return (Selected (Selected number)),
+              visible = any (\c -> cardNumber (actual c) == number) (hands state ! Computer)
+            }
+        | number <- [minBound .. maxBound]
+        ]
+   in prompt
+        state
+        ("Which name do you want to hint?")
+        (options ++ [backOption])
+
+showMessage :: GameState -> IO () -> IO ()
+showMessage state message = do
   printGameState state
   putChar '\n'
 
+  message
+
+  putChar '\n'
+  putStrLn "Press any key to continue."
+
+  _ <- getChar
+  return ()
+
+printAction :: Player -> ActionResult -> IO ()
+printAction player action = do
   case player of
     Computer -> putStr "The computer "
     Human -> putStr "You "
@@ -198,11 +224,8 @@ showAction state player action = do
 
       putStrLn "."
 
-  putChar '\n'
-  putStrLn "Press any key to continue."
-
-  _ <- getChar
-  return ()
+showAction :: GameState -> Player -> ActionResult -> IO ()
+showAction state player action = showMessage state (printAction player action)
 
 runGame :: GameState -> IO ()
 runGame state = do

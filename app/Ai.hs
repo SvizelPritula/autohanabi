@@ -2,7 +2,7 @@ module Ai where
 
 import Cards (Card (Card), CardVec, possibleCards)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), matchesHint, pileTargetNumber, enumerate)
+import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, informationTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), cardNumberToInt, enumerate, matchesHint, pileToInt)
 import Vec ((!))
 
 pickAction :: GameState -> Action
@@ -22,7 +22,7 @@ allHints =
 
 tryGuaranteedPlay :: GameState -> Maybe Int
 tryGuaranteedPlay state =
-  let canBePlayed (Card color number) = Just number == pileTargetNumber (piles state ! color)
+  let canBePlayed (Card color number) = cardNumberToInt number == pileToInt (piles state ! color) + 1
       isGuaranteedPlay card = all canBePlayed (possibleCards card)
    in indexOf isGuaranteedPlay (myHand state)
 

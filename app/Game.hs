@@ -53,6 +53,26 @@ maxInformationTokens = 8
 maxFuseTokens :: Int
 maxFuseTokens = 3
 
+removeNth :: Int -> [a] -> (a, [a])
+removeNth idx list =
+  case splitAt idx list of
+    (start, (el : end)) -> (el, start ++ end)
+    (_, []) -> error "List is too short"
+
+enumerate :: [a] -> [(Int, a)]
+enumerate = zip [0 ..]
+
+matchesHint :: Hint -> Card -> Bool
+matchesHint (ColorHint color) (Card c _) = c == color
+matchesHint (NumberHint number) (Card _ n) = n == number
+
+cardNumberToInt :: CardNumber -> Int
+cardNumberToInt number = fromEnum number + 1
+
+pileToInt :: Maybe CardNumber -> Int
+pileToInt (Nothing) = 0
+pileToInt (Just number) = cardNumberToInt number
+
 drawStartingHand :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (PlayerVec [CardState])
 drawStartingHand rng = do
   let drawHandCards = replicateM handSize (fmap fromJust (drawCard rng))
@@ -73,18 +93,6 @@ genStartingState rng = do
         fuseTokens = maxFuseTokens
       }
 
-removeNth :: Int -> [a] -> (a, [a])
-removeNth idx list =
-  case splitAt idx list of
-    (start, (el : end)) -> (el, start ++ end)
-    (_, []) -> error "List is too short"
-
-pileTargetNumber :: Maybe CardNumber -> Maybe CardNumber
-pileTargetNumber (Nothing) = Just (minBound)
-pileTargetNumber (Just number)
-  | number < maxBound = Just (succ number)
-  | otherwise = Nothing
-
 takeCardFromHand :: (RandomGen g) => GameState -> Player -> Int -> StateGenM g -> State g (Card, GameState)
 takeCardFromHand state player idx rng = do
   let (cardState, remainingHand) = removeNth idx (hands state ! player)
@@ -95,18 +103,14 @@ takeCardFromHand state player idx rng = do
       state {deck = newDeck, hands = set player newHand (hands state)}
     )
 
-matchesHint :: Hint -> Card -> Bool
-matchesHint (ColorHint color) (Card c _) = c == color
-matchesHint (NumberHint number) (Card _ n) = n == number
-
-enumerate :: [a] -> [(Int, a)]
-enumerate = zip [0 ..]
-
 play :: (RandomGen g) => GameState -> Player -> Action -> StateGenM g -> State g (GameState, ActionResult)
 play state player (Play idx) rng = do
   (Card color number, newState) <- takeCardFromHand state player idx rng
-  if Just number == pileTargetNumber (piles state ! color)
-    then return (newState {piles = set color (Just number) (piles state)}, Played (Card color number) True)
+  if cardNumberToInt number == pileToInt (piles state ! color) + 1
+    then
+      let newPiles = set color (Just number) (piles state)
+          newTokens = informationTokens state + if number == maxBound then 1 else 0
+       in return (newState {piles = newPiles, informationTokens = newTokens}, Played (Card color number) True)
     else return (newState {fuseTokens = fuseTokens state - 1}, Played (Card color number) False)
 play state player (Discard idx) rng = do
   (card, newState) <- takeCardFromHand state player idx rng

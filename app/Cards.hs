@@ -13,12 +13,6 @@ data CardNumber = One | Two | Three | Four | Five deriving (Eq, Ord, Enum, Bound
 
 data Card = Card CardColor CardNumber deriving (Eq)
 
-cardColor :: Card -> CardColor
-cardColor (Card color _) = color
-
-cardNumber :: Card -> CardNumber
-cardNumber (Card _ number) = number
-
 data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
 
 data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
@@ -26,6 +20,12 @@ data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
 type CardVec a = ColorVec (NumberVec a)
 
 type Deck = CardVec Int
+
+cardColor :: Card -> CardColor
+cardColor (Card color _) = color
+
+cardNumber :: Card -> CardNumber
+cardNumber (Card _ number) = number
 
 startingDeck :: Deck
 startingDeck = allSame (NumberVec 3 2 2 2 1)
