@@ -1,19 +1,20 @@
 module Game where
 
-import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, drawCard, startingDeck)
+import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, deckSize, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT (runStateT))
 import Data.Maybe (fromJust, maybeToList)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
-import Vec (Vec (Index, allSame, fromIndex, set, vmapWithKey, (!)))
+import Vec (Vec (Index, allSame, fromIndex, set, toList, vmapWithKey, (!)))
 
 data GameState = GameState
   { deck :: Deck,
     piles :: ColorVec (Maybe CardNumber),
     hands :: PlayerVec [CardState],
     infoTokens :: Int,
-    fuseTokens :: Int
+    fuseTokens :: Int,
+    gameEndCountdown :: Maybe Int
   }
   deriving (Show, Eq)
 
@@ -90,20 +91,35 @@ genStartingState rng = do
         hands,
         piles = allSame Nothing,
         infoTokens = maxinfoTokens,
-        fuseTokens = maxFuseTokens
+        fuseTokens = maxFuseTokens,
+        gameEndCountdown = Nothing
       }
 
 takeCardFromHand :: (RandomGen g) => Player -> Int -> StateGenM g -> StateT GameState (State g) Card
 takeCardFromHand player idx rng = do
   state <- get
+
   let (cardState, remainingHand) = removeNth idx (hands state ! player)
   (newCard, newDeck) <- lift $ runStateT (drawCard rng) (deck state)
   let newHand = remainingHand ++ maybeToList (fmap cardToCardState newCard)
-  put state {deck = newDeck, hands = set player newHand (hands state)}
+
+  let newCountdown =
+        if deckSize newDeck == 0 && gameEndCountdown state == Nothing
+          then Just 2
+          else gameEndCountdown state
+
+  put state {deck = newDeck, hands = set player newHand (hands state), gameEndCountdown = newCountdown}
   return $ actual cardState
+
+decrementGameEndCountdown :: (Monad m) => StateT GameState m ()
+decrementGameEndCountdown = do
+  state <- get
+  let newCountdown = fmap (subtract 1) $ gameEndCountdown state
+  put state {gameEndCountdown = newCountdown}
 
 play :: (RandomGen g) => Player -> Action -> StateGenM g -> StateT GameState (State g) ActionResult
 play player (Play idx) rng = do
+  decrementGameEndCountdown
   Card color number <- takeCardFromHand player idx rng
   state <- get
   if cardNumberToInt number == pileToInt (piles state ! color) + 1
@@ -118,22 +134,29 @@ play player (Play idx) rng = do
       put state {fuseTokens = fuseTokens state - 1}
       return $ Played (Card color number) False
 play player (Discard idx) rng = do
+  decrementGameEndCountdown
   card <- takeCardFromHand player idx rng
   state <- get
   put $ state {infoTokens = min (infoTokens state + 1) maxinfoTokens}
   return $ Discarded card
-play player (Hint hint) _rng =
-  do
-    state <- get
-    let coplayerCards = hands state ! (otherPlayer player)
-    let matches = matchesHint hint
-        filterKnowledge shouldMatch = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matches (Card color number) == shouldMatch)))
-        updateCardState cardState = cardState {knowledge = filterKnowledge (matches $ actual cardState) (knowledge cardState)}
-        newHand = map updateCardState coplayerCards
-    put
-      state
-        { hands = set (otherPlayer player) newHand (hands state),
-          infoTokens = infoTokens state - 1
-        }
-    return $
-      Hinted hint (map fst $ filter (uncurry $ const matches) (enumerate $ map actual coplayerCards))
+play player (Hint hint) _rng = do
+  decrementGameEndCountdown
+  state <- get
+  let coplayerCards = hands state ! (otherPlayer player)
+  let matches = matchesHint hint
+      filterKnowledge shouldMatch = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matches (Card color number) == shouldMatch)))
+      updateCardState cardState = cardState {knowledge = filterKnowledge (matches $ actual cardState) (knowledge cardState)}
+      newHand = map updateCardState coplayerCards
+  put
+    state
+      { hands = set (otherPlayer player) newHand (hands state),
+        infoTokens = infoTokens state - 1
+      }
+  return $
+    Hinted hint (map fst $ filter (uncurry $ const matches) (enumerate $ map actual coplayerCards))
+
+hasGameEnded :: GameState -> Bool
+hasGameEnded state =
+  maybe False (<= 0) (gameEndCountdown state)
+    || fuseTokens state <= 0
+    || all (== (Just maxBound)) (toList $ piles state)

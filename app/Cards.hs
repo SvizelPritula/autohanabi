@@ -109,6 +109,9 @@ indexWithWeight ((el, count) : rest) idx
   | idx < count = Just el
   | otherwise = indexWithWeight rest (idx - count)
 
+deckSize :: Deck -> Int
+deckSize deck = sum (map snd (cardsWithCounts deck))
+
 drawCard :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (Maybe Card)
 drawCard rng = do
   deck <- get

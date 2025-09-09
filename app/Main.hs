@@ -7,11 +7,11 @@ import Control.Monad (forM_)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, maxFuseTokens, maxinfoTokens, otherPlayer, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, hasGameEnded, maxFuseTokens, maxinfoTokens, otherPlayer, pileToInt, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
-import Vec (Vec (toListWithKey), (!))
+import Vec (Vec (toList, toListWithKey), (!))
 
 printGameState :: GameState -> IO ()
 printGameState state = do
@@ -25,8 +25,7 @@ printGameState state = do
   let token color True = color "*"
       token _ False = makeGray "*"
 
-  let pile color (Just card) = colored color (show card)
-      pile color Nothing = colored color "0"
+  let pile color card = colored color (show $ pileToInt card)
 
   putStr clearScreen
 
@@ -222,6 +221,18 @@ printAction player action = do
 showAction :: GameState -> Player -> ActionResult -> IO ()
 showAction state player action = showMessage state (printAction player action)
 
+showGameEnd :: GameState -> IO ()
+showGameEnd state =
+  showMessage
+    state
+    ( do
+        if fuseTokens state <= 0
+          then putStrLn "You ran out of fuse tokens. You lose."
+          else
+            let points = sum $ map pileToInt $ toList $ piles state
+             in putStrLn ("The game is over. You got " ++ show points ++ " points.")
+    )
+
 runStateGenIO :: (StateGenM StdGen -> State StdGen a) -> IO a
 runStateGenIO f = do
   rng <- initStdGen
@@ -238,7 +249,11 @@ runTurn player state = do
       (result, newState) <- runStateGenIO $ (\g -> runStateT (play player action g) state)
       showAction newState player result
 
-      return $ Just newState
+      if hasGameEnded state
+        then do
+          showGameEnd state
+          return Nothing
+        else return $ Just newState
     Nothing -> return Nothing
 
 runGame :: Player -> GameState -> IO ()
