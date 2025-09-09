@@ -2,12 +2,12 @@ module Main where
 
 import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
-import Cards (CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, longCardName)
+import Cards (CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, deckSize, longCardName)
 import Control.Monad (forM_)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, hasGameEnded, maxFuseTokens, maxinfoTokens, otherPlayer, pileToInt, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, hasGameEnded, maxFuseTokens, maxinfoTokens, otherPlayer, pileToInt, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
@@ -36,6 +36,7 @@ printGameState state = do
 
   printLine "Infos:   " [token makeBlue (i <= infoTokens state) | i <- [1 .. maxinfoTokens]]
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
+  printLine "Deck:    " [(show $ deckSize $ deck state) ++ " cards"]
 
 data OptionResult a = Selected a | Retry deriving (Functor)
 
