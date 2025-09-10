@@ -5,19 +5,26 @@ import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), Sta
 import Data.Maybe (fromJust)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM, UniformRange (uniformRM))
-import Vec (Vec (Index, allSame, fromIndex, set, (!)))
+import Vec (Vec (Index, allSame, fromIndex, set, toList, toListWithKey, (!)))
 
 data CardColor = Red | Yellow | Green | Blue | White deriving (Eq, Ord, Enum, Bounded)
 
 data CardNumber = One | Two | Three | Four | Five deriving (Eq, Ord, Enum, Bounded)
 
-data Card = Card CardColor CardNumber deriving (Eq)
+data Card = Card CardColor CardNumber deriving (Eq, Bounded)
+
+numberCount :: Int
+numberCount = fromEnum (maxBound :: CardNumber) + 1
+
+instance Enum Card where
+  toEnum i = Card (toEnum (i `quot` numberCount)) (toEnum (i `rem` numberCount))
+  fromEnum (Card color number) = (fromEnum number) + numberCount * (fromEnum color)
 
 data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
 
 data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
 
-type CardVec a = ColorVec (NumberVec a)
+newtype CardVec a = CardVec (ColorVec (NumberVec a)) deriving (Show, Eq)
 
 type Deck = CardVec Int
 
@@ -28,7 +35,7 @@ cardNumber :: Card -> CardNumber
 cardNumber (Card _ number) = number
 
 startingDeck :: Deck
-startingDeck = allSame (NumberVec 3 2 2 2 1)
+startingDeck = CardVec $ allSame (NumberVec 3 2 2 2 1)
 
 instance Vec ColorVec where
   type Index ColorVec = CardColor
@@ -51,6 +58,13 @@ instance Vec NumberVec where
   (!) (NumberVec _ _ _ _ v) Five = v
 
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
+
+instance Vec CardVec where
+  type Index CardVec = Card
+
+  (!) (CardVec vecs) (Card color number) = vecs ! color ! number
+
+  fromIndex f = CardVec $ fromIndex (\color -> fromIndex (\number -> f $ Card color number))
 
 colored :: CardColor -> String -> String
 colored Red = makeRed
@@ -82,26 +96,8 @@ instance Show Card where
 longCardName :: Card -> String
 longCardName (Card color number) = colored color (colorName color ++ " " ++ show number)
 
-setCardVec :: Card -> a -> CardVec a -> CardVec a
-setCardVec (Card color number) value deck = set color (set number value (deck ! color)) deck
-
-getCardVec :: Card -> CardVec a -> a
-getCardVec (Card color number) deck = deck ! color ! number
-
-cardsWithCounts :: Deck -> [(Card, Int)]
-cardsWithCounts deck =
-  [ (Card color number, deck ! color ! number)
-  | color <- [minBound .. maxBound],
-    number <- [minBound .. maxBound]
-  ]
-
 possibleCards :: CardVec Bool -> [Card]
-possibleCards knowledge =
-  [ Card color number
-  | color <- [minBound .. maxBound],
-    number <- [minBound .. maxBound],
-    knowledge ! color ! number
-  ]
+possibleCards knowledge = [card | card <- [minBound .. maxBound], knowledge ! card]
 
 indexWithWeight :: [(a, Int)] -> Int -> Maybe a
 indexWithWeight [] _ = Nothing
@@ -110,12 +106,12 @@ indexWithWeight ((el, count) : rest) idx
   | otherwise = indexWithWeight rest (idx - count)
 
 deckSize :: Deck -> Int
-deckSize deck = sum (map snd (cardsWithCounts deck))
+deckSize deck = sum $ toList deck
 
 drawCard :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (Maybe Card)
 drawCard rng = do
   deck <- get
-  let cards = cardsWithCounts deck
+  let cards = toListWithKey deck
   let cardCount = sum (map snd cards)
   if cardCount == 0
     then
@@ -123,6 +119,6 @@ drawCard rng = do
     else do
       idx <- lift (uniformRM (0, cardCount - 1) rng)
       let card = fromJust (indexWithWeight cards idx)
-      let newCount = (getCardVec card deck) - 1
-      put (setCardVec card newCount deck)
+      let newCount = deck ! card - 1
+      put (set card newCount deck)
       return (Just card)

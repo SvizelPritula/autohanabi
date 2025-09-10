@@ -16,7 +16,7 @@ pickAction state = case tryGuaranteedPlay state of
         then
           let humanCards = map actual (hands state ! Human)
               possibleHints = filter (\hint -> any (matchesHint hint) humanCards) allHints
-              scoreForCard hint card = length $ filter not $ concat $ map toList $ toList $ filterKnowledge hint (actual card) (knowledge card)
+              scoreForCard hint card = length $ filter not $ toList $ filterKnowledge hint (actual card) (knowledge card)
               score hint = sum $ map (scoreForCard hint) (hands state ! Human)
               hints = sortOn score possibleHints
            in Hint $ last hints

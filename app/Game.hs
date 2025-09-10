@@ -43,7 +43,7 @@ otherPlayer Computer = Human
 otherPlayer Human = Computer
 
 cardToCardState :: Card -> CardState
-cardToCardState actual = CardState {actual, knowledge = allSame (allSame True)}
+cardToCardState actual = CardState {actual, knowledge = allSame True}
 
 handSize :: Int
 handSize = 4
@@ -118,7 +118,9 @@ decrementGameEndCountdown = do
   put state {gameEndCountdown = newCountdown}
 
 filterKnowledge :: Hint -> Card -> CardVec Bool -> CardVec Bool
-filterKnowledge hint card = vmapWithKey (\color -> vmapWithKey (\number p -> p && (matchesHint hint (Card color number) == matchesHint hint card)))
+filterKnowledge hint card =
+  let matches possibleCard = matchesHint hint possibleCard == matchesHint hint card
+   in vmapWithKey (\possibleCard p -> p && matches possibleCard)
 
 play :: (RandomGen g) => Player -> Action -> StateGenM g -> StateT GameState (State g) ActionResult
 play player (Play idx) rng = do
