@@ -7,11 +7,12 @@ import Control.Monad (forM_)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), enumerate, genStartingState, hasGameEnded, maxFuseTokens, maxinfoTokens, otherPlayer, pileToInt, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, hasGameEnded, maxFuseTokens, maxInfoTokens, otherPlayer, pileToInt, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
 import Vec (Vec (toList, toListWithKey), (!))
+import Utils (enumerate)
 
 printGameState :: GameState -> IO ()
 printGameState state = do
@@ -34,7 +35,7 @@ printGameState state = do
   printLine "Computer:" (map (show . actual) (hands state ! Computer))
   printLine "You:     " (map (const (makeGray "?")) (hands state ! Human))
 
-  printLine "Infos:   " [token makeBlue (i <= infoTokens state) | i <- [1 .. maxinfoTokens]]
+  printLine "Infos:   " [token makeBlue (i <= infoTokens state) | i <- [1 .. maxInfoTokens]]
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
 
   let size = deckSize $ deck state

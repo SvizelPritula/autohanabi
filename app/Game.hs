@@ -1,11 +1,12 @@
 module Game where
 
-import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, deckSize, drawCard, startingDeck)
+import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, NumberVec, cardColor, cardNumber, deckSize, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT (runStateT))
 import Data.Maybe (fromJust, maybeToList)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
+import Utils (enumerate, removeNth)
 import Vec (Vec (Index, allSame, fromIndex, set, toList, vmapWithKey, (!)))
 
 data GameState = GameState
@@ -18,7 +19,9 @@ data GameState = GameState
   }
   deriving (Show, Eq)
 
-data CardState = CardState {actual :: Card, knowledge :: CardVec Bool} deriving (Show, Eq)
+data CardState = CardState {actual :: Card, knowledge :: Knowledge} deriving (Show, Eq)
+
+data Knowledge = Knowledge (ColorVec Bool) (NumberVec Bool) deriving (Show, Eq)
 
 data Player = Human | Computer deriving (Show, Eq)
 
@@ -42,26 +45,23 @@ otherPlayer :: Player -> Player
 otherPlayer Computer = Human
 otherPlayer Human = Computer
 
+noKnowledge :: Knowledge
+noKnowledge = Knowledge (allSame True) (allSame True)
+
 cardToCardState :: Card -> CardState
-cardToCardState actual = CardState {actual, knowledge = allSame True}
+cardToCardState actual = CardState {actual, knowledge = noKnowledge}
 
 handSize :: Int
 handSize = 4
 
-maxinfoTokens :: Int
-maxinfoTokens = 8
+maxInfoTokens :: Int
+maxInfoTokens = 8
 
 maxFuseTokens :: Int
 maxFuseTokens = 3
 
-removeNth :: Int -> [a] -> (a, [a])
-removeNth idx list =
-  case splitAt idx list of
-    (start, (el : end)) -> (el, start ++ end)
-    (_, []) -> error "List is too short"
-
-enumerate :: [a] -> [(Int, a)]
-enumerate = zip [0 ..]
+allHints :: [Hint]
+allHints = map NumberHint [minBound .. maxBound] ++ map ColorHint [minBound .. maxBound]
 
 matchesHint :: Hint -> Card -> Bool
 matchesHint (ColorHint color) (Card c _) = c == color
@@ -90,7 +90,7 @@ genStartingState rng = do
       { deck,
         hands,
         piles = allSame Nothing,
-        infoTokens = maxinfoTokens,
+        infoTokens = maxInfoTokens,
         fuseTokens = maxFuseTokens,
         gameEndCountdown = Nothing
       }
@@ -117,10 +117,17 @@ decrementGameEndCountdown = do
   let newCountdown = fmap (subtract 1) $ gameEndCountdown state
   put state {gameEndCountdown = newCountdown}
 
-filterKnowledge :: Hint -> Card -> CardVec Bool -> CardVec Bool
-filterKnowledge hint card =
-  let matches possibleCard = matchesHint hint possibleCard == matchesHint hint card
-   in vmapWithKey (\possibleCard p -> p && matches possibleCard)
+updateKnowledgePart :: (Vec a, Eq (Index a)) => Index a -> Bool -> a Bool -> a Bool
+updateKnowledgePart target matches = vmapWithKey (\idx p -> p && ((idx == target) == matches))
+
+filterKnowledge :: Hint -> Card -> Knowledge -> Knowledge
+filterKnowledge (ColorHint color) card (Knowledge colorK numberK) =
+  Knowledge (updateKnowledgePart color (cardColor card == color) colorK) numberK
+filterKnowledge (NumberHint number) card (Knowledge colorK numberK) =
+  Knowledge colorK (updateKnowledgePart number (cardNumber card == number) numberK)
+
+knowledgeToPossible :: Knowledge -> CardVec Bool
+knowledgeToPossible (Knowledge colorK numberK) = fromIndex (\(Card c n) -> colorK ! c && numberK ! n)
 
 play :: (RandomGen g) => Player -> Action -> StateGenM g -> StateT GameState (State g) ActionResult
 play player (Play idx) rng = do
@@ -142,7 +149,7 @@ play player (Discard idx) rng = do
   decrementGameEndCountdown
   card <- takeCardFromHand player idx rng
   state <- get
-  put $ state {infoTokens = min (infoTokens state + 1) maxinfoTokens}
+  put $ state {infoTokens = min (infoTokens state + 1) maxInfoTokens}
   return $ Discarded card
 play player (Hint hint) _rng = do
   decrementGameEndCountdown

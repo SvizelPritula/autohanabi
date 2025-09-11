@@ -1,46 +1,138 @@
 module Ai where
 
-import Cards (Card (Card), CardVec, possibleCards)
-import Data.Foldable (find)
-import Data.List (sortOn)
-import Game (Action (Discard, Hint, Play), CardState (actual, knowledge), GameState (hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), cardNumberToInt, enumerate, filterKnowledge, matchesHint, pileToInt)
-import Vec (Vec (toList), (!))
+import Cards (Card (Card), CardNumber, ColorVec, Deck)
+import Data.Foldable (maximumBy)
+import Data.Function (on)
+import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
+import Game qualified (CardState (actual, knowledge), GameState (deck, fuseTokens, hands, infoTokens, piles))
+import Utils (infinity, removeNth)
+import Vec (Vec (change, fromIndex, set, toList, toListWithKey, vzipWith, (!)))
+
+data AiGameState = AiGameState
+  { piles :: ColorVec (Maybe CardNumber),
+    remainingCards :: Deck,
+    ownCards :: [AiCardState],
+    coplayerCards :: [AiCardState],
+    infoTokens :: Int,
+    fuseTokens :: Int
+  }
+
+data AiCardState = AiCardState {possible :: Deck, knowledge :: Knowledge}
+
+maxDepth :: Int
+maxDepth = 2
 
 pickAction :: GameState -> Action
-pickAction state = case tryGuaranteedPlay state of
-  Just idx -> Play idx
-  Nothing -> case tryGuaranteedDiscard state of
-    Just idx -> Discard idx
-    Nothing ->
-      if infoTokens state > 0
-        then
-          let humanCards = map actual (hands state ! Human)
-              possibleHints = filter (\hint -> any (matchesHint hint) humanCards) allHints
-              scoreForCard hint card = length $ filter not $ toList $ filterKnowledge hint (actual card) (knowledge card)
-              score hint = sum $ map (scoreForCard hint) (hands state ! Human)
-              hints = sortOn score possibleHints
-           in Hint $ last hints
-        else Discard 0
+pickAction = (pickActionRec maxDepth) . stateToAiState
 
-allHints :: [Hint]
-allHints =
-  [NumberHint number | number <- [minBound .. maxBound]]
-    ++ [ColorHint color | color <- [minBound .. maxBound]]
+pickActionRec :: Int -> AiGameState -> Action
+pickActionRec depth state =
+  let cardIndices = [0, length (ownCards state) - 1]
+      cardActions = map Play cardIndices ++ map Discard cardIndices
+      hintActions = if infoTokens state > 0 then map Hint allHints else []
+      possibleActions = cardActions ++ hintActions
+   in maximumBy (compare `on` scoreAction depth state) possibleActions
 
-tryGuaranteed :: (Int -> Int -> Bool) -> GameState -> Maybe Int
-tryGuaranteed condition state =
-  let canBePlayed (Card color number) = condition (cardNumberToInt number) (pileToInt (piles state ! color))
-      isGuaranteed card = all canBePlayed (possibleCards card)
-   in indexOf isGuaranteed (myHand state)
+scoreAction :: Int -> AiGameState -> Action -> Double
+scoreAction depth state (Play idx) =
+  let updateForPlay baseState (Card color number) =
+        if cardNumberToInt number == (pileToInt $ piles state ! color) + 1
+          then baseState {piles = set color (Just number) (piles state)}
+          else baseState {fuseTokens = fuseTokens state - 1}
+   in scoreCardUse updateForPlay depth state idx
+scoreAction depth state (Discard idx) = scoreCardUse (const . addInfoToken) depth state idx
+scoreAction depth state (Hint hint) =
+  let allOutcomesRec 0 = [[]]
+      allOutcomesRec i = let r = allOutcomesRec (i - 1) in map (False :) r ++ map (True :) r
+      allOutcomes = tail $ allOutcomesRec $ length (coplayerCards state)
+      outcomeToState outcome =
+        state
+          { coplayerCards = zipWith (liftToKnowledge . filterKnowledge hint) outcome (coplayerCards state),
+            infoTokens = infoTokens state - 1
+          }
+      outcomeToScore outcome = scoreStateRec depth $ flipState $ outcomeToState outcome
+      weightForCard matches possible = sum $ map snd $ filter ((== matches) . matchesHint hint . fst) $ toListWithKey possible
+      outcomeToWeight outcome = product $ zipWith weightForCard outcome (map possible $ coplayerCards state)
+      outcomesWithWeights = map (\outcome -> (outcome, outcomeToWeight outcome)) allOutcomes
+      possibleOutcomes = filter ((> 0) . snd) outcomesWithWeights
+   in case possibleOutcomes of
+        [] -> -infinity
+        outcomes -> weightedAverage $ map (\(outcome, weight) -> (outcomeToScore outcome, fromIntegral weight)) outcomes
 
-tryGuaranteedPlay :: GameState -> Maybe Int
-tryGuaranteedPlay = tryGuaranteed (\c p -> c == p + 1)
+scoreCardUse :: (AiGameState -> Card -> AiGameState) -> Int -> AiGameState -> Int -> Double
+scoreCardUse f depth state idx =
+  let (cardState, otherCards) = removeNth idx $ ownCards state
+      cardToState (Card color number) =
+        let removeCard = (flip removeFromDeck) [Card color number]
+            removeFromHand = map (\c -> c {possible = removeCard $ possible c})
+            baseState =
+              state
+                { remainingCards = removeCard $ remainingCards state,
+                  ownCards = removeFromHand $ otherCards ++ [AiCardState {possible = remainingCards state, knowledge = noKnowledge}],
+                  coplayerCards = removeFromHand $ coplayerCards state
+                }
+         in f baseState (Card color number)
+   in weightedAverage $
+        map (\(c, w) -> (scoreStateRec depth $ flipState $ cardToState c, fromIntegral w)) $
+          filter ((> 0) . snd) $
+            toListWithKey $
+              possible cardState
 
-tryGuaranteedDiscard :: GameState -> Maybe Int
-tryGuaranteedDiscard = tryGuaranteed (\c p -> c <= p)
+scoreStateRec :: Int -> AiGameState -> Double
+scoreStateRec 0 state = scoreStateHeuristic state
+scoreStateRec depth state =
+  let action = pickActionRec (depth - 1) state
+   in scoreAction (depth - 1) state action
 
-indexOf :: (b -> Bool) -> [b] -> Maybe Int
-indexOf predicate list = fmap fst $ find (uncurry (const predicate)) (enumerate list)
+scoreStateHeuristic :: AiGameState -> Double
+scoreStateHeuristic state =
+  let pileScore = fromIntegral $ sum $ map pileToInt $ toList $ piles state
+      infoTokenScore = (* 0.5) $ fromIntegral $ infoTokens state
+      fuseTokenScore = (* 4) $ fromIntegral $ fuseTokens state
+   in pileScore + infoTokenScore + fuseTokenScore
 
-myHand :: GameState -> [CardVec Bool]
-myHand = (map knowledge) . (! Computer) . hands
+weightedAverage :: [(Double, Double)] -> Double
+weightedAverage elements =
+  let totalWeight = sum $ map snd elements
+      weightedSum = sum $ map (uncurry (*)) elements
+   in weightedSum / totalWeight
+
+liftToKnowledge :: (Knowledge -> Knowledge) -> AiCardState -> AiCardState
+liftToKnowledge f state = state {knowledge = f $ knowledge state}
+
+filterKnowledge :: Hint -> Bool -> Knowledge -> Knowledge
+filterKnowledge (ColorHint color) matches (Knowledge colorK numberK) =
+  Knowledge (updateKnowledgePart color matches colorK) numberK
+filterKnowledge (NumberHint number) matches (Knowledge colorK numberK) =
+  Knowledge colorK (updateKnowledgePart number matches numberK)
+
+flipState :: AiGameState -> AiGameState
+flipState state = state {ownCards = coplayerCards state, coplayerCards = ownCards state}
+
+addInfoToken :: AiGameState -> AiGameState
+addInfoToken state
+  | infoTokens state < maxInfoTokens = state {infoTokens = infoTokens state + 1}
+  | otherwise = state
+
+addToDeck :: Deck -> [Card] -> Deck
+addToDeck = foldl (\deck idx -> change idx (+ 1) deck)
+
+removeFromDeck :: Deck -> [Card] -> Deck
+removeFromDeck = foldl (\deck idx -> change idx (subtract 1) deck)
+
+stateToAiState :: GameState -> AiGameState
+stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
+  let remainingCards = addToDeck deck (map Game.actual $ hands ! Computer)
+      ownCardToState knowledge =
+        let possible = vzipWith (\r k -> r * fromEnum k) remainingCards $ knowledgeToPossible knowledge
+         in AiCardState {possible, knowledge}
+      coplayerCardToState CardState {actual, knowledge} =
+        AiCardState {possible = fromIndex $ (\c -> if c == actual then remainingCards ! actual else 0), knowledge}
+   in AiGameState
+        { piles,
+          remainingCards,
+          ownCards = map (ownCardToState . Game.knowledge) (hands ! Computer),
+          coplayerCards = map coplayerCardToState (hands ! Human),
+          infoTokens,
+          fuseTokens
+        }
