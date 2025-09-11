@@ -20,11 +20,11 @@ instance Enum Card where
   toEnum i = Card (toEnum (i `quot` numberCount)) (toEnum (i `rem` numberCount))
   fromEnum (Card color number) = (fromEnum number) + numberCount * (fromEnum color)
 
-data ColorVec a = ColorVec a a a a a deriving (Show, Eq)
+data ColorVec a = ColorVec a a a a a deriving (Show, Eq, Ord)
 
-data NumberVec a = NumberVec a a a a a deriving (Show, Eq)
+data NumberVec a = NumberVec a a a a a deriving (Show, Eq, Ord)
 
-newtype CardVec a = CardVec (ColorVec (NumberVec a)) deriving (Show, Eq)
+newtype CardVec a = CardVec (ColorVec (NumberVec a)) deriving (Show, Eq, Ord)
 
 type Deck = CardVec Int
 

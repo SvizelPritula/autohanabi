@@ -4,6 +4,7 @@ import Cards (Card (Card), CardNumber, ColorVec, Deck)
 import Control.Parallel.Strategies (evalTuple2, parMap, r0, rseq)
 import Data.Foldable (maximumBy)
 import Data.Function (on)
+import Data.List (groupBy, sortOn)
 import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
 import Game qualified (CardState (actual, knowledge), GameState (deck, fuseTokens, hands, infoTokens, piles))
 import Utils (infinity, removeNth)
@@ -17,11 +18,12 @@ data AiGameState = AiGameState
     infoTokens :: Int,
     fuseTokens :: Int
   }
+  deriving (Show, Eq, Ord)
 
-data AiCardState = AiCardState {possible :: Deck, knowledge :: Knowledge}
+data AiCardState = AiCardState {possible :: Deck, knowledge :: Knowledge} deriving (Show, Eq, Ord)
 
 maxDepth :: Int
-maxDepth = 2
+maxDepth = 3
 
 pickAction :: GameState -> Action
 pickAction = (pickActionRec maxDepth) . stateToAiState
@@ -63,22 +65,16 @@ scoreAction depth state (Hint hint) =
 
 scoreCardUse :: (AiGameState -> Card -> AiGameState) -> Int -> AiGameState -> Int -> Double
 scoreCardUse f depth state idx =
-  let (cardState, otherCards) = removeNth idx $ ownCards state
-      cardToState (Card color number) =
-        let removeCard = (flip removeFromDeck) [Card color number]
-            removeFromHand = map (\c -> c {possible = removeCard $ possible c})
-            baseState =
-              state
-                { remainingCards = removeCard $ remainingCards state,
-                  ownCards = removeFromHand $ otherCards ++ [AiCardState {possible = remainingCards state, knowledge = noKnowledge}],
-                  coplayerCards = removeFromHand $ coplayerCards state
-                }
-         in f baseState (Card color number)
+  let baseState = state {ownCards = otherCards ++ [AiCardState {possible = remainingCards state, knowledge = noKnowledge}]}
+      (cardState, otherCards) = removeNth idx $ ownCards state
+      cardToState (Card color number) = f baseState (Card color number)
    in weightedAverage $
-        map (\(c, w) -> (scoreStateRec depth $ flipState $ cardToState c, fromIntegral w)) $
-          filter ((> 0) . snd) $
-            toListWithKey $
-              possible cardState
+        map (\(s, w) -> (scoreStateRec depth s, fromIntegral w)) $
+          deduplicateWeighted $
+            map (\(c, w) -> (flipState $ cardToState c, w)) $
+              filter ((> 0) . snd) $
+                toListWithKey $
+                  possible cardState
 
 scoreStateRec :: Int -> AiGameState -> Double
 scoreStateRec 0 state = scoreStateHeuristic state
@@ -90,9 +86,16 @@ scoreStateRec depth state =
 scoreStateHeuristic :: AiGameState -> Double
 scoreStateHeuristic state =
   let pileScore = fromIntegral $ sum $ map pileToInt $ toList $ piles state
-      infoTokenScore = (* 0.25) $ fromIntegral $ infoTokens state
+      infoTokenScore = (* 0.1) $ fromIntegral $ infoTokens state
       fuseTokenScore = (* 3) $ fromIntegral $ fuseTokens state
    in pileScore + infoTokenScore + fuseTokenScore
+
+deduplicateWeighted :: (Eq a, Ord a, Num b) => [(a, b)] -> [(a, b)]
+deduplicateWeighted list =
+  let sorted = sortOn fst list
+      grouped = groupBy ((==) `on` fst) sorted
+      combine same = (fst $ head same, sum $ map snd same)
+   in map combine grouped
 
 weightedAverage :: [(Double, Double)] -> Double
 weightedAverage elements =

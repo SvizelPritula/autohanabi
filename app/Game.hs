@@ -21,7 +21,7 @@ data GameState = GameState
 
 data CardState = CardState {actual :: Card, knowledge :: Knowledge} deriving (Show, Eq)
 
-data Knowledge = Knowledge (ColorVec Bool) (NumberVec Bool) deriving (Show, Eq)
+data Knowledge = Knowledge (ColorVec Bool) (NumberVec Bool) deriving (Show, Eq, Ord)
 
 data Player = Human | Computer deriving (Show, Eq)
 
