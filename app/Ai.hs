@@ -1,6 +1,7 @@
 module Ai where
 
 import Cards (Card (Card), CardNumber, ColorVec, Deck)
+import Control.Parallel.Strategies (parMap, rseq)
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
@@ -31,7 +32,8 @@ pickActionRec depth state =
       cardActions = map Play cardIndices ++ map Discard cardIndices
       hintActions = if infoTokens state > 0 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
-      scoredActions = map (\a -> (a, scoreAction depth state a)) possibleActions
+      scores = parMap rseq (scoreAction depth state) possibleActions
+      scoredActions = zip possibleActions scores
    in fst $ maximumBy (compare `on` snd) scoredActions
 
 scoreAction :: Int -> AiGameState -> Action -> Double
