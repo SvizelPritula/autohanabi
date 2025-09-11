@@ -1,7 +1,7 @@
 module Ai where
 
 import Cards (Card (Card), CardNumber, ColorVec, Deck)
-import Control.Parallel.Strategies (parMap, rseq)
+import Control.Parallel.Strategies (evalTuple2, parMap, r0, rseq)
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
@@ -28,12 +28,11 @@ pickAction = (pickActionRec maxDepth) . stateToAiState
 
 pickActionRec :: Int -> AiGameState -> Action
 pickActionRec depth state =
-  let cardIndices = [0, length (ownCards state) - 1]
+  let cardIndices = [0 .. length (ownCards state) - 1]
       cardActions = map Play cardIndices ++ map Discard cardIndices
       hintActions = if infoTokens state > 0 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
-      scores = parMap rseq (scoreAction depth state) possibleActions
-      scoredActions = zip possibleActions scores
+      scoredActions = parMap (evalTuple2 r0 rseq) (\a -> (a, scoreAction depth state a)) possibleActions
    in fst $ maximumBy (compare `on` snd) scoredActions
 
 scoreAction :: Int -> AiGameState -> Action -> Double
@@ -84,14 +83,15 @@ scoreCardUse f depth state idx =
 scoreStateRec :: Int -> AiGameState -> Double
 scoreStateRec 0 state = scoreStateHeuristic state
 scoreStateRec depth state =
-  let action = pickActionRec (depth - 1) state
+  let knownState = state {ownCards = map (cardStateFromKnowledge (remainingCards state) . knowledge) $ ownCards state}
+      action = pickActionRec (depth - 1) knownState
    in scoreAction (depth - 1) state action
 
 scoreStateHeuristic :: AiGameState -> Double
 scoreStateHeuristic state =
   let pileScore = fromIntegral $ sum $ map pileToInt $ toList $ piles state
-      infoTokenScore = (* 0.5) $ fromIntegral $ infoTokens state
-      fuseTokenScore = (* 4) $ fromIntegral $ fuseTokens state
+      infoTokenScore = (* 0.25) $ fromIntegral $ infoTokens state
+      fuseTokenScore = (* 3) $ fromIntegral $ fuseTokens state
    in pileScore + infoTokenScore + fuseTokenScore
 
 weightedAverage :: [(Double, Double)] -> Double
@@ -123,18 +123,21 @@ addToDeck = foldl (\deck idx -> change idx (+ 1) deck)
 removeFromDeck :: Deck -> [Card] -> Deck
 removeFromDeck = foldl (\deck idx -> change idx (subtract 1) deck)
 
+cardStateFromKnowledge :: Deck -> Knowledge -> AiCardState
+cardStateFromKnowledge remainingCards knowledge =
+  let possible = vzipWith (\r k -> r * fromEnum k) remainingCards $ knowledgeToPossible knowledge
+   in AiCardState {possible, knowledge}
+
 stateToAiState :: GameState -> AiGameState
 stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
   let remainingCards = addToDeck deck (map Game.actual $ hands ! Computer)
-      ownCardToState knowledge =
-        let possible = vzipWith (\r k -> r * fromEnum k) remainingCards $ knowledgeToPossible knowledge
-         in AiCardState {possible, knowledge}
+      ownCardToState = (cardStateFromKnowledge remainingCards) . Game.knowledge
       coplayerCardToState CardState {actual, knowledge} =
         AiCardState {possible = fromIndex $ (\c -> if c == actual then remainingCards ! actual else 0), knowledge}
    in AiGameState
         { piles,
           remainingCards,
-          ownCards = map (ownCardToState . Game.knowledge) (hands ! Computer),
+          ownCards = map ownCardToState (hands ! Computer),
           coplayerCards = map coplayerCardToState (hands ! Human),
           infoTokens,
           fuseTokens
