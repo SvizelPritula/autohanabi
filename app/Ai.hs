@@ -31,7 +31,8 @@ pickActionRec depth state =
       cardActions = map Play cardIndices ++ map Discard cardIndices
       hintActions = if infoTokens state > 0 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
-   in maximumBy (compare `on` scoreAction depth state) possibleActions
+      scoredActions = map (\a -> (a, scoreAction depth state a)) possibleActions
+   in fst $ maximumBy (compare `on` snd) scoredActions
 
 scoreAction :: Int -> AiGameState -> Action -> Double
 scoreAction depth state (Play idx) =
