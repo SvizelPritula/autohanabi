@@ -31,8 +31,8 @@ pickAction = (pickActionRec maxDepth) . stateToAiState
 pickActionRec :: Int -> AiGameState -> Action
 pickActionRec depth state =
   let cardIndices = [0 .. length (ownCards state) - 1]
-      cardActions = map Play cardIndices ++ map Discard cardIndices
-      hintActions = if infoTokens state > 0 then map Hint allHints else []
+      cardActions = map Discard cardIndices ++ map Play cardIndices
+      hintActions = if infoTokens state > 0 && depth > 1 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
       scoredActions = parMap (evalTuple2 r0 rseq) (\a -> (a, scoreAction depth state a)) possibleActions
    in fst $ maximumBy (compare `on` snd) scoredActions
