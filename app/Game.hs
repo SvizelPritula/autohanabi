@@ -3,7 +3,7 @@ module Game where
 import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, NumberVec, cardColor, cardNumber, deckSize, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT (runStateT))
-import Data.Maybe (fromJust, maybeToList)
+import Data.Maybe (fromJust, maybeToList, isNothing)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
 import Utils (enumerate, removeNth)
@@ -71,7 +71,7 @@ cardNumberToInt :: CardNumber -> Int
 cardNumberToInt number = fromEnum number + 1
 
 pileToInt :: Maybe CardNumber -> Int
-pileToInt (Nothing) = 0
+pileToInt Nothing = 0
 pileToInt (Just number) = cardNumberToInt number
 
 drawStartingHand :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (PlayerVec [CardState])
@@ -104,7 +104,7 @@ takeCardFromHand player idx rng = do
   let newHand = remainingHand ++ maybeToList (fmap cardToCardState newCard)
 
   let newCountdown =
-        if deckSize newDeck == 0 && gameEndCountdown state == Nothing
+        if deckSize newDeck == 0 && isNothing (gameEndCountdown state)
           then Just 2
           else gameEndCountdown state
 
@@ -114,7 +114,7 @@ takeCardFromHand player idx rng = do
 decrementGameEndCountdown :: (Monad m) => StateT GameState m ()
 decrementGameEndCountdown = do
   state <- get
-  let newCountdown = fmap (subtract 1) $ gameEndCountdown state
+  let newCountdown = subtract 1 <$> gameEndCountdown state
   put state {gameEndCountdown = newCountdown}
 
 updateKnowledgePart :: (Vec a, Eq (Index a)) => Index a -> Bool -> a Bool -> a Bool
@@ -154,7 +154,7 @@ play player (Discard idx) rng = do
 play player (Hint hint) _rng = do
   decrementGameEndCountdown
   state <- get
-  let coplayerCards = hands state ! (otherPlayer player)
+  let coplayerCards = hands state ! otherPlayer player
   let updateCardState cardState = cardState {knowledge = filterKnowledge hint (actual cardState) (knowledge cardState)}
       newHand = map updateCardState coplayerCards
   put
@@ -169,4 +169,4 @@ hasGameEnded :: GameState -> Bool
 hasGameEnded state =
   maybe False (<= 0) (gameEndCountdown state)
     || fuseTokens state <= 0
-    || all (== (Just maxBound)) (toList $ piles state)
+    || all (== Just maxBound) (toList $ piles state)

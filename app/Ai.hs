@@ -2,6 +2,7 @@ module Ai where
 
 import Cards (Card (Card), CardNumber, ColorVec, Deck)
 import Control.Parallel.Strategies (evalTuple2, parMap, r0, rseq)
+import Data.Bifunctor (Bifunctor (bimap))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
@@ -26,7 +27,7 @@ maxDepth :: Int
 maxDepth = 3
 
 pickAction :: GameState -> Action
-pickAction = (pickActionRec maxDepth) . stateToAiState
+pickAction = pickActionRec maxDepth . stateToAiState
 
 pickActionRec :: Int -> AiGameState -> Action
 pickActionRec depth state =
@@ -40,7 +41,7 @@ pickActionRec depth state =
 scoreAction :: Int -> AiGameState -> Action -> Double
 scoreAction depth state (Play idx) =
   let updateForPlay baseState (Card color number) =
-        if cardNumberToInt number == (pileToInt $ piles state ! color) + 1
+        if cardNumberToInt number == pileToInt (piles state ! color) + 1
           then baseState {piles = set color (Just number) (piles state)}
           else baseState {fuseTokens = fuseTokens state - 1}
    in scoreCardUse updateForPlay depth state idx
@@ -61,7 +62,7 @@ scoreAction depth state (Hint hint) =
       possibleOutcomes = filter ((> 0) . snd) outcomesWithWeights
    in case possibleOutcomes of
         [] -> -infinity
-        outcomes -> weightedAverage $ map (\(outcome, weight) -> (outcomeToScore outcome, fromIntegral weight)) outcomes
+        outcomes -> weightedAverage $ map (bimap outcomeToScore fromIntegral) outcomes
 
 scoreCardUse :: (AiGameState -> Card -> AiGameState) -> Int -> AiGameState -> Int -> Double
 scoreCardUse f depth state idx =
@@ -69,7 +70,7 @@ scoreCardUse f depth state idx =
       (cardState, otherCards) = removeNth idx $ ownCards state
       cardToState (Card color number) = f baseState (Card color number)
    in weightedAverage $
-        map (\(s, w) -> (scoreStateRec depth s, fromIntegral w)) $
+        map (bimap (scoreStateRec depth) fromIntegral) $
           deduplicateWeighted $
             map (\(c, w) -> (flipState $ cardToState c, w)) $
               filter ((> 0) . snd) $
@@ -134,9 +135,9 @@ cardStateFromKnowledge remainingCards knowledge =
 stateToAiState :: GameState -> AiGameState
 stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
   let remainingCards = addToDeck deck (map Game.actual $ hands ! Computer)
-      ownCardToState = (cardStateFromKnowledge remainingCards) . Game.knowledge
+      ownCardToState = cardStateFromKnowledge remainingCards . Game.knowledge
       coplayerCardToState CardState {actual, knowledge} =
-        AiCardState {possible = fromIndex $ (\c -> if c == actual then remainingCards ! actual else 0), knowledge}
+        AiCardState {possible = fromIndex (\c -> if c == actual then remainingCards ! actual else 0), knowledge}
    in AiGameState
         { piles,
           remainingCards,

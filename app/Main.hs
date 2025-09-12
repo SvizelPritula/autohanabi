@@ -39,7 +39,7 @@ printGameState state = do
   printLine "Fuses:   " [token makeRed (i <= fuseTokens state) | i <- [1 .. maxFuseTokens]]
 
   let size = deckSize $ deck state
-  printLine "Deck:    " [(show size) ++ if size == 1 then " card" else " cards"]
+  printLine "Deck:    " [show size ++ if size == 1 then " card" else " cards"]
 
 data OptionResult a = Selected a | Retry deriving (Functor)
 
@@ -95,7 +95,7 @@ numberToOrdinal 1 = "first"
 numberToOrdinal 2 = "second"
 numberToOrdinal 3 = "third"
 numberToOrdinal 4 = "fourth"
-numberToOrdinal n = (show n) ++ "th"
+numberToOrdinal n = show n ++ "th"
 
 promptCard :: GameState -> String -> IO (OptionResult Int)
 promptCard state action =
@@ -157,7 +157,7 @@ promptHintColor state =
         ]
    in prompt
         state
-        ("Which color do you want to hint?")
+        "Which color do you want to hint?"
         (options ++ [backOption])
 
 promptHintNumber :: GameState -> IO (OptionResult CardNumber)
@@ -173,7 +173,7 @@ promptHintNumber state =
         ]
    in prompt
         state
-        ("Which name do you want to hint?")
+        "Which name do you want to hint?"
         (options ++ [backOption])
 
 showMessage :: GameState -> IO () -> IO ()
@@ -197,11 +197,11 @@ printAction player action = do
 
   case action of
     Played card success -> do
-      putStr ("played a " ++ (longCardName card))
+      putStr ("played a " ++ longCardName card)
       if success
         then putStrLn "."
         else putStrLn ", which was a misfire."
-    Discarded card -> putStrLn ("discarded a " ++ (longCardName card) ++ ".")
+    Discarded card -> putStrLn ("discarded a " ++ longCardName card ++ ".")
     Hinted hint cards -> do
       case player of
         Computer -> putStr "told you your "
@@ -250,7 +250,7 @@ runTurn player state = do
 
   case maybeAction of
     Just action -> do
-      (result, newState) <- runStateGenIO $ (\g -> runStateT (play player action g) state)
+      (result, newState) <- runStateGenIO (\g -> runStateT (play player action g) state)
       showAction newState player result
 
       if hasGameEnded newState
@@ -263,9 +263,7 @@ runTurn player state = do
 runGame :: Player -> GameState -> IO ()
 runGame player state = do
   maybeState <- runTurn player state
-  case maybeState of
-    Just newState -> runGame (otherPlayer player) newState
-    Nothing -> return ()
+  forM_ maybeState (runGame (otherPlayer player))
 
 main :: IO ()
 main = do

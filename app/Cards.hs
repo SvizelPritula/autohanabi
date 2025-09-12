@@ -18,7 +18,7 @@ numberCount = fromEnum (maxBound :: CardNumber) + 1
 
 instance Enum Card where
   toEnum i = Card (toEnum (i `quot` numberCount)) (toEnum (i `rem` numberCount))
-  fromEnum (Card color number) = (fromEnum number) + numberCount * (fromEnum color)
+  fromEnum (Card color number) = fromEnum number + numberCount * fromEnum color
 
 data ColorVec a = ColorVec a a a a a deriving (Show, Eq, Ord)
 
@@ -64,7 +64,7 @@ instance Vec CardVec where
 
   (!) (CardVec vecs) (Card color number) = vecs ! color ! number
 
-  fromIndex f = CardVec $ fromIndex (\color -> fromIndex (\number -> f $ Card color number))
+  fromIndex f = CardVec $ fromIndex (\color -> fromIndex (f . Card color))
 
 colored :: CardColor -> String -> String
 colored Red = makeRed
