@@ -11,8 +11,8 @@ import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Play
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
-import Vec (Vec (toList, toListWithKey), (!))
 import Utils (enumerate)
+import Vec (Vec (toList, toListWithKey), (!))
 
 printGameState :: GameState -> IO ()
 printGameState state = do
@@ -176,8 +176,8 @@ promptHintNumber state =
         "Which name do you want to hint?"
         (options ++ [backOption])
 
-showMessage :: GameState -> IO () -> IO ()
-showMessage state message = do
+confirmMessage :: GameState -> IO () -> IO ()
+confirmMessage state message = do
   printGameState state
   putChar '\n'
 
@@ -223,11 +223,11 @@ printAction player action = do
       putStrLn "."
 
 showAction :: GameState -> Player -> ActionResult -> IO ()
-showAction state player action = showMessage state (printAction player action)
+showAction state player action = confirmMessage state (printAction player action)
 
 showGameEnd :: GameState -> IO ()
 showGameEnd state =
-  showMessage
+  confirmMessage
     state
     ( do
         if fuseTokens state <= 0
@@ -236,6 +236,13 @@ showGameEnd state =
             let points = sum $ map pileToInt $ toList $ piles state
              in putStrLn ("The game is over. You got " ++ show points ++ " points.")
     )
+
+showComputerThinking :: GameState -> IO ()
+showComputerThinking state = do
+  printGameState state
+  putChar '\n'
+
+  putStrLn "The computer is picking a move…"
 
 runStateGenIO :: (StateGenM StdGen -> State StdGen a) -> IO a
 runStateGenIO f = do
@@ -246,7 +253,9 @@ runTurn :: Player -> GameState -> IO (Maybe GameState)
 runTurn player state = do
   maybeAction <- case player of
     Human -> promptTurn state
-    Computer -> return $ Just $ pickAction state
+    Computer -> do
+      showComputerThinking state
+      return $ Just $ pickAction state
 
   case maybeAction of
     Just action -> do
