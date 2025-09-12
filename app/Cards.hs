@@ -34,6 +34,9 @@ cardColor (Card color _) = color
 cardNumber :: Card -> CardNumber
 cardNumber (Card _ number) = number
 
+unwrapCardVec :: CardVec a -> ColorVec (NumberVec a)
+unwrapCardVec (CardVec inner) = inner
+
 startingDeck :: Deck
 startingDeck = CardVec $ allSame (NumberVec 3 2 2 2 1)
 

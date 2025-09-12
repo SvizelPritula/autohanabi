@@ -1,11 +1,12 @@
 module Ai where
 
-import Cards (Card (Card), CardNumber, ColorVec, Deck)
+import Cards (Card (Card), CardNumber, ColorVec, Deck, NumberVec, unwrapCardVec)
 import Control.Parallel.Strategies (evalTuple2, parMap, r0, rseq)
-import Data.Bifunctor (Bifunctor (bimap))
+import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
+import Debug.Trace (traceShowId)
 import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
 import Game qualified (CardState (actual, knowledge), GameState (deck, fuseTokens, hands, infoTokens, piles))
 import Utils (infinity, removeNth)
@@ -26,6 +27,18 @@ data AiCardState = AiCardState {possible :: Deck, knowledge :: Knowledge} derivi
 maxDepth :: Int
 maxDepth = 3
 
+misfireScore :: Double
+misfireScore = -3
+
+playScore :: Double
+playScore = 1
+
+potentialLossScore :: Double
+potentialLossScore = -1
+
+infoTokenScore :: Double
+infoTokenScore = 0.1
+
 pickAction :: GameState -> Action
 pickAction = pickActionRec maxDepth . stateToAiState
 
@@ -33,7 +46,7 @@ pickActionRec :: Int -> AiGameState -> Action
 pickActionRec depth state =
   let cardIndices = [0 .. length (ownCards state) - 1]
       cardActions = map Discard cardIndices ++ map Play cardIndices
-      hintActions = if infoTokens state > 0 && depth > 1 then map Hint allHints else []
+      hintActions = if infoTokens state > 0 && depth > 0 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
       scoredActions = parMap (evalTuple2 r0 rseq) (\a -> (a, scoreAction depth state a)) possibleActions
    in fst $ maximumBy (compare `on` snd) scoredActions
@@ -42,10 +55,16 @@ scoreAction :: Int -> AiGameState -> Action -> Double
 scoreAction depth state (Play idx) =
   let updateForPlay baseState (Card color number) =
         if cardNumberToInt number == pileToInt (piles state ! color) + 1
-          then baseState {piles = set color (Just number) (piles state)}
-          else baseState {fuseTokens = fuseTokens state - 1}
+          then (baseState {piles = set color (Just number) (piles state)}, playScore)
+          else (baseState {fuseTokens = fuseTokens state - 1}, misfireScore)
    in scoreCardUse updateForPlay depth state idx
-scoreAction depth state (Discard idx) = scoreCardUse (const . addInfoToken) depth state idx
+scoreAction depth state (Discard idx) =
+  let updateForPlay baseState (Card color number) =
+        let calcPotential = potential (piles baseState ! color)
+            remainingOfColor = unwrapCardVec (remainingCards baseState) ! color
+            potentialLoss = calcPotential remainingOfColor - calcPotential (change number (subtract 1) remainingOfColor)
+         in (addInfoToken baseState, potentialLossScore * fromIntegral potentialLoss)
+   in scoreCardUse updateForPlay depth state idx
 scoreAction depth state (Hint hint) =
   let allOutcomesRec 0 = [[]]
       allOutcomesRec i = let r = allOutcomesRec (i - 1) in map (False :) r ++ map (True :) r
@@ -64,18 +83,19 @@ scoreAction depth state (Hint hint) =
         [] -> -infinity
         outcomes -> weightedAverage $ map (bimap outcomeToScore fromIntegral) outcomes
 
-scoreCardUse :: (AiGameState -> Card -> AiGameState) -> Int -> AiGameState -> Int -> Double
+scoreCardUse :: (AiGameState -> Card -> (AiGameState, Double)) -> Int -> AiGameState -> Int -> Double
 scoreCardUse f depth state idx =
   let baseState = state {ownCards = otherCards ++ [AiCardState {possible = remainingCards state, knowledge = noKnowledge}]}
       (cardState, otherCards) = removeNth idx $ ownCards state
-      cardToState (Card color number) = f baseState (Card color number)
-   in weightedAverage $
-        map (bimap (scoreStateRec depth) fromIntegral) $
-          deduplicateWeighted $
-            map (\(c, w) -> (flipState $ cardToState c, w)) $
-              filter ((> 0) . snd) $
-                toListWithKey $
-                  possible cardState
+      cardToState = first flipState . f baseState
+      cards = filter ((> 0) . snd) $ toListWithKey $ possible cardState
+      options = map (bimap cardToState fromIntegral) cards
+      states = map (first fst) options
+      bias = adjustBias depth $ weightedAverage $ map (first snd) options
+   in (+ bias) $
+        weightedAverage $
+          map (first (scoreStateRec depth)) $
+            deduplicateWeighted states
 
 scoreStateRec :: Int -> AiGameState -> Double
 scoreStateRec 0 state = scoreStateHeuristic state
@@ -86,10 +106,8 @@ scoreStateRec depth state =
 
 scoreStateHeuristic :: AiGameState -> Double
 scoreStateHeuristic state =
-  let pileScore = fromIntegral $ sum $ map pileToInt $ toList $ piles state
-      infoTokenScore = (* 0.1) $ fromIntegral $ infoTokens state
-      fuseTokenScore = (* 3) $ fromIntegral $ fuseTokens state
-   in pileScore + infoTokenScore + fuseTokenScore
+  let infoToken = (* infoTokenScore) $ fromIntegral $ infoTokens state
+   in infoToken
 
 deduplicateWeighted :: (Eq a, Ord a, Num b) => [(a, b)] -> [(a, b)]
 deduplicateWeighted list =
@@ -103,6 +121,12 @@ weightedAverage elements =
   let totalWeight = sum $ map snd elements
       weightedSum = sum $ map (uncurry (*)) elements
    in weightedSum / totalWeight
+
+potential :: Maybe CardNumber -> NumberVec Int -> Int
+potential pile remaining = length $ takeWhile (> 0) $ drop (pileToInt pile) $ toList remaining
+
+adjustBias :: Int -> Double -> Double
+adjustBias depth = (* (1 + 0.1 * fromIntegral depth))
 
 liftToKnowledge :: (Knowledge -> Knowledge) -> AiCardState -> AiCardState
 liftToKnowledge f state = state {knowledge = f $ knowledge state}
@@ -146,3 +170,8 @@ stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
           infoTokens,
           fuseTokens
         }
+
+traceTop :: (Show a) => Int -> a -> a
+traceTop depth
+  | depth == maxDepth = traceShowId
+  | otherwise = id
