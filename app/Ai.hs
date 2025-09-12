@@ -6,7 +6,7 @@ import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
-import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
+import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, otherPlayer, pileToInt, updateKnowledgePart)
 import Game qualified (CardState (actual, knowledge), GameState (deck, fuseTokens, hands, infoTokens, piles))
 import Utils (infinity, removeNth)
 import Vec (Vec (change, fromIndex, set, toList, toListWithKey, vzipWith, (!)))
@@ -38,8 +38,11 @@ potentialLossScore = -1
 infoTokenScore :: Double
 infoTokenScore = 0.1
 
+lossScore :: Double
+lossScore = -100
+
 pickAction :: GameState -> Action
-pickAction = pickActionRec maxDepth . stateToAiState
+pickAction = pickActionRec maxDepth . stateToAiState Computer
 
 pickActionRec :: Int -> AiGameState -> Action
 pickActionRec depth state =
@@ -108,7 +111,8 @@ scoreStateRec depth state =
 scoreStateHeuristic :: AiGameState -> Double
 scoreStateHeuristic state =
   let infoToken = (* infoTokenScore) $ fromIntegral $ infoTokens state
-   in infoToken
+      loss = if fuseTokens state <= 0 then lossScore else 0
+   in infoToken + loss
 
 deduplicateWeighted :: (Eq c, Ord c, Num b) => [(a, b, c)] -> [(a, b)]
 deduplicateWeighted list =
@@ -160,17 +164,17 @@ cardStateFromKnowledge remainingCards knowledge =
   let possible = vzipWith (\r k -> r * fromEnum k) remainingCards $ knowledgeToPossible knowledge
    in AiCardState {possible, knowledge}
 
-stateToAiState :: GameState -> AiGameState
-stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
-  let remainingCards = addToDeck deck (map Game.actual $ hands ! Computer)
+stateToAiState :: Player -> GameState -> AiGameState
+stateToAiState me GameState {piles, deck, hands, infoTokens, fuseTokens} =
+  let remainingCards = addToDeck deck (map Game.actual $ hands ! me)
       ownCardToState = cardStateFromKnowledge remainingCards . Game.knowledge
       coplayerCardToState CardState {actual, knowledge} =
         AiCardState {possible = fromIndex (fromEnum . (== actual)), knowledge}
    in AiGameState
         { piles,
           remainingCards,
-          ownCards = map ownCardToState (hands ! Computer),
-          coplayerCards = map coplayerCardToState (hands ! Human),
+          ownCards = map ownCardToState (hands ! me),
+          coplayerCards = map coplayerCardToState (hands ! otherPlayer me),
           infoTokens,
           fuseTokens
         }
