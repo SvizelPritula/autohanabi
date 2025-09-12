@@ -6,7 +6,6 @@ import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
-import Debug.Trace (traceShowId)
 import Game (Action (Discard, Hint, Play), CardState (CardState), GameState (GameState), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), allHints, cardNumberToInt, knowledgeToPossible, matchesHint, maxInfoTokens, noKnowledge, pileToInt, updateKnowledgePart)
 import Game qualified (CardState (actual, knowledge), GameState (deck, fuseTokens, hands, infoTokens, piles))
 import Utils (infinity, removeNth)
@@ -166,7 +165,7 @@ stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
   let remainingCards = addToDeck deck (map Game.actual $ hands ! Computer)
       ownCardToState = cardStateFromKnowledge remainingCards . Game.knowledge
       coplayerCardToState CardState {actual, knowledge} =
-        AiCardState {possible = fromIndex (\c -> if c == actual then remainingCards ! actual else 0), knowledge}
+        AiCardState {possible = fromIndex (fromEnum . (== actual)), knowledge}
    in AiGameState
         { piles,
           remainingCards,
@@ -175,8 +174,3 @@ stateToAiState GameState {piles, deck, hands, infoTokens, fuseTokens} =
           infoTokens,
           fuseTokens
         }
-
-traceTop :: (Show a) => Int -> a -> a
-traceTop depth
-  | depth == maxDepth = traceShowId
-  | otherwise = id
