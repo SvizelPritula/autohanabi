@@ -55,15 +55,15 @@ scoreAction :: Int -> AiGameState -> Action -> Double
 scoreAction depth state (Play idx) =
   let updateForPlay baseState (Card color number) =
         if cardNumberToInt number == pileToInt (piles state ! color) + 1
-          then (baseState {piles = set color (Just number) (piles state)}, playScore)
-          else (baseState {fuseTokens = fuseTokens state - 1}, misfireScore)
+          then (Just color, baseState {piles = set color (Just number) (piles state)}, playScore)
+          else (Nothing, baseState {fuseTokens = fuseTokens state - 1}, misfireScore)
    in scoreCardUse updateForPlay depth state idx
 scoreAction depth state (Discard idx) =
   let updateForPlay baseState (Card color number) =
         let calcPotential = potential (piles baseState ! color)
             remainingOfColor = unwrapCardVec (remainingCards baseState) ! color
             potentialLoss = calcPotential remainingOfColor - calcPotential (change number (subtract 1) remainingOfColor)
-         in (addInfoToken baseState, potentialLossScore * fromIntegral potentialLoss)
+         in ((), addInfoToken baseState, potentialLossScore * fromIntegral potentialLoss)
    in scoreCardUse updateForPlay depth state idx
 scoreAction depth state (Hint hint) =
   let allOutcomesRec 0 = [[]]
@@ -83,15 +83,17 @@ scoreAction depth state (Hint hint) =
         [] -> -infinity
         outcomes -> weightedAverage $ map (bimap outcomeToScore fromIntegral) outcomes
 
-scoreCardUse :: (AiGameState -> Card -> (AiGameState, Double)) -> Int -> AiGameState -> Int -> Double
+scoreCardUse :: (Eq k, Ord k) => (AiGameState -> Card -> (k, AiGameState, Double)) -> Int -> AiGameState -> Int -> Double
 scoreCardUse f depth state idx =
   let baseState = state {ownCards = otherCards ++ [AiCardState {possible = remainingCards state, knowledge = noKnowledge}]}
       (cardState, otherCards) = removeNth idx $ ownCards state
-      cardToState = first flipState . f baseState
       cards = filter ((> 0) . snd) $ toListWithKey $ possible cardState
-      options = map (bimap cardToState fromIntegral) cards
-      states = map (first fst) options
-      bias = adjustBias depth $ weightedAverage $ map (first snd) options
+      mapCard card =
+        let (k, s, b) = f baseState card
+         in (k, flipState s, b)
+      options = map (bimap mapCard fromIntegral) cards
+      states = map (\((k, s, _), w) -> (s, w, k)) options
+      bias = adjustBias depth $ weightedAverage $ map (first (\(_, _, b) -> b)) options
    in (+ bias) $
         weightedAverage $
           map (first (scoreStateRec depth)) $
@@ -109,11 +111,14 @@ scoreStateHeuristic state =
   let infoToken = (* infoTokenScore) $ fromIntegral $ infoTokens state
    in infoToken
 
-deduplicateWeighted :: (Eq a, Ord a, Num b) => [(a, b)] -> [(a, b)]
+deduplicateWeighted :: (Eq c, Ord c, Num b) => [(a, b, c)] -> [(a, b)]
 deduplicateWeighted list =
-  let sorted = sortOn fst list
-      grouped = groupBy ((==) `on` fst) sorted
-      combine same = (fst $ head same, sum $ map snd same)
+  let state (a, _, _) = a
+      weight (_, b, _) = b
+      key (_, _, c) = c
+      sorted = sortOn key list
+      grouped = groupBy ((==) `on` key) sorted
+      combine same = (state $ head same, sum $ map weight same)
    in map combine grouped
 
 weightedAverage :: [(Double, Double)] -> Double

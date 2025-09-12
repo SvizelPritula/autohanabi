@@ -30,7 +30,7 @@ class Vec a where
   toListWithKey vec = map (\i -> (i, vec ! i)) [minBound .. maxBound]
 
   toList :: (Bounded (Index a), Enum (Index a)) => a b -> [b]
-  toList = (map (snd)) . toListWithKey
+  toList = map snd . toListWithKey
 
   vcount :: (Bounded (Index a), Enum (Index a)) => (b -> Bool) -> a b -> Int
   vcount f vec = length $ filter f $ toList vec
