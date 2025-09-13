@@ -172,7 +172,7 @@ stateToAiState me GameState {piles, deck, hands, infoTokens, fuseTokens} =
         AiCardState {possible = fromIndex (fromEnum . (== actual)), knowledge}
    in AiGameState
         { piles,
-          remainingCards,
+          remainingCards = addToDeck remainingCards (map Game.actual $ hands ! otherPlayer me),
           ownCards = map ownCardToState (hands ! me),
           coplayerCards = map coplayerCardToState (hands ! otherPlayer me),
           infoTokens,

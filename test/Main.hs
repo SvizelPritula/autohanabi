@@ -294,6 +294,21 @@ testAi = describe "Ai" $ do
             }
     pickAction state `shouldSatisfy` (\a -> a == Hint (ColorHint Yellow) || a == Hint (NumberHint Two))
 
+  it "will give hint for playable card in endgame" $ do
+    let state =
+          GameState
+            { hands =
+                PlayerVec
+                  (map (\actual -> CardState {actual, knowledge = noKnowledge}) [Card Red One, Card Green Two, Card White Three, Card Yellow Two])
+                  (withPerfectKnowledge [Card Green Two, Card Yellow One, Card Blue Two, Card Yellow Five]),
+              piles = ColorVec (Just Five) (Just One) (Just Five) (Just Five) (Just Five),
+              deck = allSame 0,
+              infoTokens = 8,
+              fuseTokens = 3,
+              gameEndCountdown = Nothing
+            }
+    pickAction state `shouldSatisfy` (\a -> a == Hint (ColorHint Yellow) || a == Hint (NumberHint Two))
+
 main :: IO ()
 main = hspec $ do
   testUtils
