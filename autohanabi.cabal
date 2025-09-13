@@ -1,37 +1,64 @@
-cabal-version:      3.4
-name:               autohanabi
-version:            0.0.1.0
+cabal-version:          3.4
+name:                   autohanabi
+version:                0.0.1.0
 
-synopsis:           A game of Hanabi where you play against the computer.
-description:        This is a small CLI implementation of the game of Hanabi,
-                    where you need to play colored cards in numerical order while only seeing the other player's cards.
-                    Your teammate will be controlled by a state-searching algorithm.
+synopsis:               A game of Hanabi where you play against the computer.
+description:            This is a small CLI implementation of the game of Hanabi,
+                        where you need to play colored cards in numerical order while only seeing the other player's cards.
+                        Your teammate will be controlled by a state-searching algorithm.
 
-license:            BSD-3-Clause
-license-file:       LICENSE
+license:                BSD-3-Clause
+license-file:           LICENSE
 
-author:             Benjamin Swart
-maintainer:         Benjaminswart@email.cz
+author:                 Benjamin Swart
+maintainer:             Benjaminswart@email.cz
 
-category:           Game
-build-type:         Simple
+category:               Game
+build-type:             Simple
 
-extra-doc-files:    CHANGELOG.md
+extra-doc-files:        CHANGELOG.md
 
 source-repository head
-    type:     git
-    location: https://github.com/SvizelPritula/autohanabi
+    type:               git
+    location:           https://github.com/SvizelPritula/autohanabi
 
-executable autohanabi
-    main-is:            Main.hs
-    other-modules:      Vec, Cards, Game, Ansi, Ai, Utils
-    hs-source-dirs:     app
+common language
+    default-language:   GHC2024
+    default-extensions: TypeFamilies, DuplicateRecordFields
+    ghc-options:        -Wall -Wno-x-partial -O2 -threaded
+
+library internal
+    import:             language
+
+    exposed-modules:    Vec, Cards, Game, Ai, Utils, Ansi
+    hs-source-dirs:     src
 
     build-depends:      base >=4.20.0.0 && < 4.22,
                         random ^>=1.3.1,
                         mtl ^>=2.3.1,
                         parallel ^>=3.2.2.0
 
-    default-language:   GHC2024
-    default-extensions: TypeFamilies, DuplicateRecordFields
-    ghc-options:        -Wall -Wno-x-partial -O2 -threaded -with-rtsopts=-N
+executable autohanabi
+    import:             language
+
+    main-is:            Main.hs
+    hs-source-dirs:     app
+
+    build-depends:      base >=4.20.0.0 && < 4.22,
+                        random ^>=1.3.1,
+                        mtl ^>=2.3.1,
+                        autohanabi:internal
+
+    ghc-options:        -with-rtsopts=-N
+
+test-suite test
+    import:             language
+
+    main-is:            Main.hs
+    hs-source-dirs:     test
+
+    type:               exitcode-stdio-1.0
+
+    build-depends:      base >=4.20.0.0 && < 4.22,
+                        hspec ^>= 2.11.12,
+                        autohanabi:internal
