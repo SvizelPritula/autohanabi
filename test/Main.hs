@@ -1,5 +1,6 @@
 module Main where
 
+import Cards (Card (Card), deckSize, indexWithWeight, startingDeck)
 import Control.Exception (evaluate)
 import Test.Hspec (SpecWith, anyException, describe, hspec, it, shouldBe, shouldSatisfy, shouldThrow)
 import Utils (enumerate, indexOf, infinity, removeNth)
@@ -55,7 +56,7 @@ testVec = describe "Vec" $ do
 
   describe "set" $ do
     it "sets correct element" $ do
-      set B "x" (TestVec "a" "b" "c") `shouldBe` TestVec "a" "s" "c"
+      set B "x" (TestVec "a" "b" "c") `shouldBe` TestVec "a" "x" "c"
 
   describe "vmapWithKey" $ do
     it "maps everything correctly" $ do
@@ -65,6 +66,29 @@ testVec = describe "Vec" $ do
     it "returns all elements" $ do
       toList (TestVec 'a' 'b' 'c') `shouldBe` "abc"
 
+enumAll :: (Bounded a, Enum a) => [a]
+enumAll = [minBound .. maxBound]
+
+testCards :: SpecWith ()
+testCards = describe "Cards" $ do
+  describe "startingDeck" $ do
+    it "has 50 cards" $ do
+      deckSize startingDeck `shouldBe` 50
+
+  describe "Enum Card" $ do
+    it "enumerates all cards" $ do
+      enumAll `shouldBe` [Card color number | color <- enumAll, number <- enumAll]
+
+  describe "indexWithWeight" $ do
+    it "findsAllCards" $ do
+      let cards = [('a', 2), ('b', 1), ('c', 0), ('d', 1)]
+      let expected = map Just "aabd"
+      map (indexWithWeight cards) [0 .. 3] `shouldBe` expected
+    it "returns Nothing on index out of bounds" $ do
+      indexWithWeight [('a', 3)] 3 `shouldBe` Nothing
+
 main :: IO ()
 main = hspec $ do
   testUtils
+  testVec
+  testCards
