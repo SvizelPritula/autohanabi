@@ -7,6 +7,7 @@ import Control.Monad (forM_)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
+import GHC.Conc (par)
 import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, hasGameEnded, maxFuseTokens, maxInfoTokens, otherPlayer, pileToInt, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
 import System.Random (StdGen, initStdGen)
@@ -249,34 +250,39 @@ runStateGenIO f = do
   rng <- initStdGen
   return (runStateGen_ rng f)
 
-runTurn :: Player -> GameState -> IO (Maybe GameState)
-runTurn player state = do
+runTurn :: Player -> GameState -> IO () -> IO (Maybe (GameState, IO ()))
+runTurn player state showPrevAction = do
   maybeAction <- case player of
-    Human -> promptTurn state
+    Human -> do
+      showPrevAction
+      promptTurn state
     Computer -> do
+      let action = pickAction state
+      par action showPrevAction
       showComputerThinking state
-      return $ Just $ pickAction state
+      return $ Just action
 
   case maybeAction of
     Just action -> do
       (result, newState) <- runStateGenIO (\g -> runStateT (play player action g) state)
-      showAction newState player result
+      let showThisAction = showAction newState player result
 
       if hasGameEnded newState
         then do
+          showThisAction
           showGameEnd newState
           return Nothing
-        else return $ Just newState
+        else return $ Just (newState, showThisAction)
     Nothing -> return Nothing
 
-runGame :: Player -> GameState -> IO ()
-runGame player state = do
-  maybeState <- runTurn player state
-  forM_ maybeState (runGame (otherPlayer player))
+runGame :: Player -> GameState -> IO () -> IO ()
+runGame player state showPrevAction = do
+  maybeState <- runTurn player state showPrevAction
+  forM_ maybeState (uncurry (runGame (otherPlayer player)))
 
 main :: IO ()
 main = do
   state <- runStateGenIO genStartingState
   hSetBuffering stdin NoBuffering
 
-  runGame Human state
+  runGame Human state (pure ())
