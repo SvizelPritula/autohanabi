@@ -3,7 +3,7 @@ module Game where
 import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, NumberVec, cardColor, cardNumber, deckSize, drawCard, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT (runStateT))
-import Data.Maybe (fromJust, maybeToList, isNothing)
+import Data.Maybe (fromJust, isNothing, maybeToList)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
 import Utils (enumerate, removeNth)
@@ -31,7 +31,7 @@ data Action = Play Int | Discard Int | Hint Hint deriving (Show, Eq)
 
 data Hint = ColorHint CardColor | NumberHint CardNumber deriving (Show, Eq)
 
-data ActionResult = Played Card Bool | Discarded Card | Hinted Hint [Int]
+data ActionResult = Played Card Bool | Discarded Card | Hinted Hint [Int] deriving (Show, Eq)
 
 instance Vec PlayerVec where
   type Index PlayerVec = Player
@@ -129,6 +129,9 @@ filterKnowledge (NumberHint number) card (Knowledge colorK numberK) =
 knowledgeToPossible :: Knowledge -> CardVec Bool
 knowledgeToPossible (Knowledge colorK numberK) = fromIndex (\(Card c n) -> colorK ! c && numberK ! n)
 
+addInfoToken :: Int -> Int
+addInfoToken prev = min (prev + 1) maxInfoTokens
+
 play :: (RandomGen g) => Player -> Action -> StateGenM g -> StateT GameState (State g) ActionResult
 play player (Play idx) rng = do
   decrementGameEndCountdown
@@ -139,7 +142,7 @@ play player (Play idx) rng = do
       put
         state
           { piles = set color (Just number) (piles state),
-            infoTokens = infoTokens state + if number == maxBound then 1 else 0
+            infoTokens = if number == maxBound then addInfoToken $ infoTokens state else infoTokens state
           }
       return $ Played (Card color number) True
     else do
@@ -149,7 +152,7 @@ play player (Discard idx) rng = do
   decrementGameEndCountdown
   card <- takeCardFromHand player idx rng
   state <- get
-  put $ state {infoTokens = min (infoTokens state + 1) maxInfoTokens}
+  put $ state {infoTokens = addInfoToken $ infoTokens state}
   return $ Discarded card
 play player (Hint hint) _rng = do
   decrementGameEndCountdown
