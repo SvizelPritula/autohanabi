@@ -9,4 +9,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/state/cabal
+          key: cabal-global
+      - run: cabal update
+
       - run: cabal test
