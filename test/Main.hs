@@ -1,11 +1,12 @@
 module Main where
 
-import Cards (Card (Card), CardColor (Blue, Green, Red), CardNumber (Five, Four, One, Two), ColorVec (ColorVec), NumberVec (NumberVec), deckSize, drawCard, indexWithWeight, startingDeck)
+import Ai (pickAction)
+import Cards (Card (Card), CardColor (Blue, Green, Red, White, Yellow), CardNumber (Five, Four, One, Three, Two), CardVec (CardVec), ColorVec (ColorVec), NumberVec (NumberVec), cardColor, cardNumber, deckSize, drawCard, indexWithWeight, startingDeck)
 import Control.Exception (evaluate)
 import Control.Monad (forM_)
 import Control.Monad.State.Strict (StateT (runStateT))
 import Data.Maybe (fromJust, isJust)
-import Game (Action (Discard, Hint, Play), ActionResult (Hinted), CardState (CardState, knowledge), GameState (GameState, deck, fuseTokens, gameEndCountdown, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), PlayerVec (PlayerVec), genStartingState, handSize, hasGameEnded, maxInfoTokens, noKnowledge, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Hinted), CardState (CardState, actual, knowledge), GameState (GameState, deck, fuseTokens, gameEndCountdown, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Knowledge (Knowledge), Player (Computer, Human), PlayerVec (PlayerVec), genStartingState, handSize, hasGameEnded, maxInfoTokens, noKnowledge, play)
 import System.Random (mkStdGen)
 import System.Random.Stateful (runStateGen_)
 import Test.Hspec (SpecWith, anyException, context, describe, hspec, it, shouldBe, shouldSatisfy, shouldThrow)
@@ -243,9 +244,60 @@ testGame = describe "Game" $ do
     it "returns true when all piles full" $ do
       hasGameEnded basicState {piles = allSame (Just Five)} `shouldBe` True
 
+withPerfectKnowledge :: [Card] -> [CardState]
+withPerfectKnowledge = map (\card -> CardState {actual = card, knowledge = Knowledge (fromIndex (== cardColor card)) (fromIndex (== cardNumber card))})
+
+testAi :: SpecWith ()
+testAi = describe "Ai" $ do
+  it "will play matching card" $ do
+    let state =
+          GameState
+            { hands =
+                PlayerVec
+                  (withPerfectKnowledge [Card Red number | number <- [One .. Four]])
+                  (withPerfectKnowledge [Card Green number | number <- [One .. Four]]),
+              piles = ColorVec (Just Five) (Just Five) (Just One) (Just Five) (Just Five),
+              deck = allSame 1,
+              infoTokens = 4,
+              fuseTokens = 3,
+              gameEndCountdown = Nothing
+            }
+    pickAction state `shouldBe` Play 1
+
+  it "will discard unneeded card" $ do
+    let state =
+          GameState
+            { hands =
+                PlayerVec
+                  (withPerfectKnowledge [Card color Three | color <- [Red .. Blue]])
+                  (withPerfectKnowledge [Card color Two | color <- [Red .. Blue]]),
+              piles = ColorVec Nothing Nothing (Just Five) Nothing (Just Five),
+              deck = CardVec (allSame (NumberVec 1 0 1 1 1)),
+              infoTokens = 0,
+              fuseTokens = 3,
+              gameEndCountdown = Nothing
+            }
+    pickAction state `shouldBe` Discard 2
+
+  it "will give hint for playable card" $ do
+    let state =
+          GameState
+            { hands =
+                PlayerVec
+                  (map (\actual -> CardState {actual, knowledge = noKnowledge}) [Card Red One, Card Green Two, Card White Three, Card Yellow Two])
+                  (withPerfectKnowledge [Card color Five | color <- [Red .. Blue]]),
+              piles = ColorVec (Just Five) (Just One) (Just Five) (Just Five) (Just Five),
+              deck = allSame 1,
+              infoTokens = 8,
+              fuseTokens = 3,
+              gameEndCountdown = Nothing
+            }
+    pickAction state `shouldSatisfy` (\a -> a == Hint (ColorHint Yellow) || a == Hint (NumberHint Two))
+
 main :: IO ()
 main = hspec $ do
   testUtils
   testVec
   testCards
   testGame
+  testAi
