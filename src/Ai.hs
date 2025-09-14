@@ -50,24 +50,24 @@ pickActionRec depth state =
       cardActions = map Discard cardIndices ++ map Play cardIndices
       hintActions = if infoTokens state > 0 && depth > 0 then map Hint allHints else []
       possibleActions = cardActions ++ hintActions
-      scoredActions = parMap (evalTuple2 r0 rseq) (\a -> (a, scoreAction depth state a)) possibleActions
+      scoredActions = parMap (evalTuple2 r0 rseq) (\a -> (a, scoreActionRec depth state a)) possibleActions
    in fst $ maximumBy (compare `on` snd) scoredActions
 
-scoreAction :: Int -> AiGameState -> Action -> Double
-scoreAction depth state (Play idx) =
+scoreActionRec :: Int -> AiGameState -> Action -> Double
+scoreActionRec depth state (Play idx) =
   let updateForPlay baseState (Card color number) =
         if cardNumberToInt number == pileToInt (piles state ! color) + 1
           then (Just color, baseState {piles = set color (Just number) (piles state)}, playScore)
           else (Nothing, baseState {fuseTokens = fuseTokens state - 1}, misfireScore)
    in scoreCardUse updateForPlay depth state idx
-scoreAction depth state (Discard idx) =
+scoreActionRec depth state (Discard idx) =
   let updateForPlay baseState (Card color number) =
         let calcPotential = potential (piles baseState ! color)
             remainingOfColor = unwrapCardVec (remainingCards baseState) ! color
             potentialLoss = calcPotential remainingOfColor - calcPotential (change number (subtract 1) remainingOfColor)
          in ((), addInfoToken baseState, potentialLossScore * fromIntegral potentialLoss)
    in scoreCardUse updateForPlay depth state idx
-scoreAction depth state (Hint hint) =
+scoreActionRec depth state (Hint hint) =
   let allOutcomesRec 0 = [[]]
       allOutcomesRec i = let r = allOutcomesRec (i - 1) in map (False :) r ++ map (True :) r
       allOutcomes = tail $ allOutcomesRec $ length (coplayerCards state)
@@ -106,7 +106,7 @@ scoreStateRec 0 state = scoreStateHeuristic state
 scoreStateRec depth state =
   let knownState = state {ownCards = map (cardStateFromKnowledge (remainingCards state) . knowledge) $ ownCards state}
       action = pickActionRec (depth - 1) knownState
-   in scoreAction (depth - 1) state action
+   in scoreActionRec (depth - 1) state action
 
 scoreStateHeuristic :: AiGameState -> Double
 scoreStateHeuristic state =

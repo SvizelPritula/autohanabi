@@ -49,7 +49,7 @@ For each color, the highest successfully played card is shown,
 or `0` if no cards of that color have been played yet.
 Equivalently, each digit represents the number of cards of that color that have been played so far.
 
-The second line shows the cards hend in the hand by the computer.
+The second line shows the cards held in the hand by the computer.
 Each card is represented by a digit in the correct color.
 The third line shows a `?` for each card in your hand and can mostly be ignored.
 
@@ -88,3 +88,13 @@ e.g. what hint he gave you and which of your cards match it.
 
 If the game ends, the amount of points you got will be displayed.
 The program will then exit.
+
+## How Autohanabi works
+
+The inner workings of Autohanabi are described in the `docs/` directory.
+
+## Copyright
+
+Copyright (c) 2025, Benjamin Swart
+
+Licensed under the BSD 3-Clause License, see the `LICENSE` file for more details.
