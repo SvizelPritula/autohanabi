@@ -5,7 +5,7 @@ import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), Sta
 import Data.Maybe (fromJust)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM, UniformRange (uniformRM))
-import Vec (Vec (Index, allSame, fromIndex, set, toList, toListWithKey, (!)))
+import Vec (Vec (Index, allSame, change, fromIndex, set, toList, toListWithKey, (!)))
 
 data CardColor = Red | Yellow | Green | Blue | White deriving (Eq, Ord, Enum, Bounded)
 
@@ -51,6 +51,14 @@ instance Vec ColorVec where
 
   fromIndex f = ColorVec (f Red) (f Yellow) (f Green) (f Blue) (f White)
 
+  change Red f (ColorVec a b c d e) = ColorVec (f a) b c d e
+  change Yellow f (ColorVec a b c d e) = ColorVec a (f b) c d e
+  change Green f (ColorVec a b c d e) = ColorVec a b (f c) d e
+  change Blue f (ColorVec a b c d e) = ColorVec a b c (f d) e
+  change White f (ColorVec a b c d e) = ColorVec a b c d (f e)
+
+  toList (ColorVec a b c d e) = [a, b, c, d, e]
+
 instance Vec NumberVec where
   type Index NumberVec = CardNumber
 
@@ -61,6 +69,14 @@ instance Vec NumberVec where
   (!) (NumberVec _ _ _ _ v) Five = v
 
   fromIndex f = NumberVec (f One) (f Two) (f Three) (f Four) (f Five)
+
+  change One f (NumberVec a b c d e) = NumberVec (f a) b c d e
+  change Two f (NumberVec a b c d e) = NumberVec a (f b) c d e
+  change Three f (NumberVec a b c d e) = NumberVec a b (f c) d e
+  change Four f (NumberVec a b c d e) = NumberVec a b c (f d) e
+  change Five f (NumberVec a b c d e) = NumberVec a b c d (f e)
+
+  toList (NumberVec a b c d e) = [a, b, c, d, e]
 
 instance Vec CardVec where
   type Index CardVec = Card
