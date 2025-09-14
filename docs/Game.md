@@ -19,7 +19,7 @@ It stores the number of cards remaining in the deck for each card type.
 It doesn't have an order, a random card is chosen by `drawCard` whenever needed.
 
 The hand of each player is stored as a list of `CardState`s.
-A player usually has `4` cards, but they can get down to `3` at the very end of the game.
+A player usually has 4 cards, but they can get down to 3 at the very end of the game.
 A `CardState` stores two values: `actual`, the `Card` that the card really is,
 and `knowledge`, which stores what the player knows about the card.
 The `Knowledge` type consists of a `ColorVec Bool` and a `NumberVec Bool`,
@@ -51,7 +51,7 @@ See the implementation of `main` and `runStateGenIO` in `Main` for an example of
 The `play` function is responsible for evaluating a turn, or `Action`.
 `Action` is an enum that defines the three possible actions a player can take during a turn
 (play a card, discard a card, give a hint).
-It is one of the largest function in the entire program and can evaluate each type of action,
+It is one of the largest functions in the entire program and can evaluate each type of action,
 with the help of some helper methods.
 It also uses the `State` monad, but this time there are two of them:
 The inner `State` monad stores the `GameState`

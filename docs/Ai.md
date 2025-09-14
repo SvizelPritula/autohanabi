@@ -79,7 +79,7 @@ to the `scoreStateHeuristic` function, some bonuses and penalties to the score
 are applied directly withing the `scoreActionRec` function.
 There is one bonus and two penalties applied this way:
 the bonus for playing a card, the penalty for a misfire
-and the penalty from making some cards permanently unplayable
+and the penalty for making some cards permanently unplayable
 by discarding the last of a given card type.
 This allows us not to store exactly which card was played/discarded within `AiGameState`.
 This means all discards and all misfires will result in the exact same `AiGameState`,
