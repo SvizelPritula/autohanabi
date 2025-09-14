@@ -9,7 +9,7 @@ import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
 import GHC.Conc (par)
 import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, hasGameEnded, maxFuseTokens, maxInfoTokens, otherPlayer, pileToInt, play)
-import System.IO (BufferMode (NoBuffering), hSetBuffering, stdin)
+import System.IO (BufferMode (NoBuffering), hSetBuffering, hSetEcho, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
 import Utils (enumerate)
@@ -284,5 +284,6 @@ main :: IO ()
 main = do
   state <- runStateGenIO genStartingState
   hSetBuffering stdin NoBuffering
+  hSetEcho stdin False
 
   runGame Human state (pure ())
