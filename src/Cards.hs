@@ -127,6 +127,12 @@ indexWithWeight ((el, count) : rest) idx
 deckSize :: Deck -> Int
 deckSize deck = sum $ toList deck
 
+addToDeck :: Deck -> [Card] -> Deck
+addToDeck = foldl (\deck idx -> change idx (+ 1) deck)
+
+removeFromDeck :: Deck -> [Card] -> Deck
+removeFromDeck = foldl (\deck idx -> change idx (subtract 1) deck)
+
 drawCard :: (RandomGen g) => StateGenM g -> StateT Deck (State g) (Maybe Card)
 drawCard rng = do
   deck <- get

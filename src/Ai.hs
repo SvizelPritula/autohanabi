@@ -1,6 +1,6 @@
 module Ai where
 
-import Cards (Card (Card), CardNumber, ColorVec, Deck, NumberVec, unwrapCardVec)
+import Cards (Card (Card), CardNumber, ColorVec, Deck, NumberVec, unwrapCardVec, addToDeck)
 import Control.Parallel.Strategies (evalTuple2, parMap, r0, rseq)
 import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Foldable (maximumBy)
@@ -152,12 +152,6 @@ addInfoToken :: AiGameState -> AiGameState
 addInfoToken state
   | infoTokens state < maxInfoTokens = state {infoTokens = infoTokens state + 1}
   | otherwise = state
-
-addToDeck :: Deck -> [Card] -> Deck
-addToDeck = foldl (\deck idx -> change idx (+ 1) deck)
-
-removeFromDeck :: Deck -> [Card] -> Deck
-removeFromDeck = foldl (\deck idx -> change idx (subtract 1) deck)
 
 cardStateFromKnowledge :: Deck -> Knowledge -> AiCardState
 cardStateFromKnowledge remainingCards knowledge =

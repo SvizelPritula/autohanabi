@@ -2,13 +2,14 @@ module Main where
 
 import Ai (pickAction)
 import Ansi (clearScreen, makeBlue, makeBold, makeGray, makeRed, makeUnderline)
-import Cards (CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, deckSize, longCardName)
+import Cards (Card (Card), CardColor (Blue, Green, Red, White, Yellow), CardNumber, cardColor, cardNumber, colorName, colored, deckSize, longCardName, startingDeck)
 import Control.Monad (forM_)
 import Control.Monad.State.Strict (State, StateT (runStateT))
 import Data.Char (chr, ord, toUpper)
 import Data.Foldable (find)
+import Data.Functor (($>))
 import GHC.Conc (par)
-import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), genStartingState, hasGameEnded, maxFuseTokens, maxInfoTokens, otherPlayer, pileToInt, play)
+import Game (Action (Discard, Hint, Play), ActionResult (Discarded, Hinted, Played), CardState (actual), GameState (deck, fuseTokens, hands, infoTokens, piles), Hint (ColorHint, NumberHint), Player (Computer, Human), discardPile, genStartingState, hasGameEnded, maxFuseTokens, maxInfoTokens, otherPlayer, pileToInt, play)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, hSetEcho, stdin)
 import System.Random (StdGen, initStdGen)
 import System.Random.Stateful (StateGenM, runStateGen_)
@@ -85,6 +86,7 @@ promptTurn state =
         [ Option {key = 'p', label = "Play a card", action = handle Play (promptCard state "play"), visible = True},
           Option {key = 'd', label = "Discard a card", action = handle Discard (promptCard state "discard"), visible = True},
           Option {key = 'h', label = "Give a hint", action = handle Hint (promptHint state), visible = infoTokens state > 0},
+          Option {key = 'l', label = "Look through discard pile", action = showDiscardPile state $> Retry, visible = True},
           Option {key = 'Q', label = "Quit", action = return (Selected Nothing), visible = True}
         ]
 
@@ -176,6 +178,25 @@ promptHintNumber state =
         state
         "Which name do you want to hint?"
         (options ++ [backOption])
+
+showDiscardPile :: GameState -> IO ()
+showDiscardPile state = confirmMessage state $ do
+  putStrLn (makeUnderline "Discard pile:")
+
+  let pile = discardPile state
+      printPrefix i = case i of
+        0 -> pure ()
+        _ -> putChar ' '
+      printList list = forM_ (enumerate list) (\(i, e) -> printPrefix i *> e)
+      printCard card present = case present of
+        True -> putStr $ show card
+        False -> putStr $ makeGray $ show $ cardNumber card
+      printCardState card = printList [printCard card (i <= pile ! card) | i <- [1 .. startingDeck ! card]]
+      printColorState color = do
+        printList [printCardState (Card color number) | number <- [minBound .. maxBound]]
+        putChar '\n'
+
+  sequence_ [printColorState color | color <- [minBound .. maxBound]]
 
 confirmMessage :: GameState -> IO () -> IO ()
 confirmMessage state message = do

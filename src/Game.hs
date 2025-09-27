@@ -1,13 +1,13 @@
 module Game where
 
-import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, NumberVec, cardColor, cardNumber, deckSize, drawCard, startingDeck)
+import Cards (Card (Card), CardColor, CardNumber, CardVec, ColorVec, Deck, NumberVec, cardColor, cardNumber, deckSize, drawCard, removeFromDeck, startingDeck)
 import Control.Monad (replicateM)
 import Control.Monad.State.Strict (MonadState (get, put), MonadTrans (lift), State, StateT (runStateT))
 import Data.Maybe (fromJust, isNothing, maybeToList)
 import System.Random (RandomGen)
 import System.Random.Stateful (StateGenM)
 import Utils (enumerate, removeNth)
-import Vec (Vec (Index, allSame, fromIndex, set, toList, vmapWithKey, (!)))
+import Vec (Vec (Index, allSame, fromIndex, set, toList, vmapWithKey, vzipWith, (!)))
 
 data GameState = GameState
   { deck :: Deck,
@@ -23,7 +23,7 @@ data CardState = CardState {actual :: Card, knowledge :: Knowledge} deriving (Sh
 
 data Knowledge = Knowledge (ColorVec Bool) (NumberVec Bool) deriving (Show, Eq, Ord)
 
-data Player = Human | Computer deriving (Show, Eq)
+data Player = Human | Computer deriving (Show, Eq, Enum, Bounded)
 
 data PlayerVec a = PlayerVec a a deriving (Show, Eq)
 
@@ -173,3 +173,11 @@ hasGameEnded state =
   maybe False (<= 0) (gameEndCountdown state)
     || fuseTokens state <= 0
     || all (== Just maxBound) (toList $ piles state)
+
+discardPile :: GameState -> Deck
+discardPile state =
+  let notInDeck = vzipWith (-) startingDeck (deck state)
+      usedCards = removeFromDeck notInDeck (map actual $ concat $ toList $ hands state)
+      numbersUnder = maybe [] (\n -> [minBound .. n])
+      playedCards = [Card color number | color <- [minBound .. maxBound], number <- numbersUnder (piles state ! color)]
+   in removeFromDeck usedCards playedCards
